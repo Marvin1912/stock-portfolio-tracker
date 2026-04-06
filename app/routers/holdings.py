@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import plotly.graph_objects as go
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,37 @@ async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
     return result
+
+
+@router.get("/chart/allocation")
+async def get_allocation_chart(
+    db: AsyncSession = _DB,
+) -> JSONResponse:
+    """Return a Plotly donut chart of portfolio allocation as JSON."""
+    summary = await PortfolioService().get_summary(db)
+    valued = [h for h in summary.holdings if h.current_value is not None]
+
+    if not valued:
+        return JSONResponse(content={})
+
+    fig = go.Figure(
+        go.Pie(
+            labels=[h.ticker for h in valued],
+            values=[float(h.current_value) for h in valued],  # type: ignore[arg-type]
+            hole=0.5,
+            customdata=[h.name for h in valued],
+            hovertemplate=(
+                "<b>%{label}</b> — %{customdata}<br>"
+                "Value: %{value:,.2f}<br>"
+                "%{percent}<extra></extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        margin={"t": 20, "b": 20, "l": 20, "r": 20},
+        showlegend=True,
+    )
+    return JSONResponse(content=fig.to_dict())
 
 
 @router.get("/summary", response_model=PortfolioSummary)
