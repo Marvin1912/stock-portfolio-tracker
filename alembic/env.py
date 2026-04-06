@@ -17,8 +17,8 @@ from sqlalchemy import engine_from_config, pool
 # ---------------------------------------------------------------------------
 # Load application models so their metadata is registered on Base.
 # ---------------------------------------------------------------------------
-from app.models import Base  # noqa: F401 — populates Base.metadata
 from app.config import get_settings
+from app.models import Base  # noqa: F401 — populates Base.metadata
 
 # ---------------------------------------------------------------------------
 # Alembic Config object — provides access to alembic.ini values.

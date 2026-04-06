@@ -24,6 +24,6 @@ class Holding(Base):
         Numeric(precision=18, scale=8), nullable=False
     )
 
-    stock: Mapped["Stock"] = relationship(  # noqa: F821
+    stock: Mapped[Stock] = relationship(
         "Stock", back_populates="holdings"
     )

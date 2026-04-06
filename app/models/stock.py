@@ -22,6 +22,6 @@ class Stock(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), nullable=False)
 
-    holdings: Mapped[list["Holding"]] = relationship(  # noqa: F821
+    holdings: Mapped[list[Holding]] = relationship(
         "Holding", back_populates="stock", cascade="all, delete-orphan"
     )
