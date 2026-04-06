@@ -85,7 +85,11 @@ async def htmx_create_holding(
         return _render(
             request,
             "partials/add_holding_form.html",
-            {"error": "Quantity must be a positive number.", "ticker": ticker, "quantity": quantity},
+            {
+                "error": "Quantity must be a positive number.",
+                "ticker": ticker,
+                "quantity": quantity,
+            },
         )
 
     # Resolve or create the stock
