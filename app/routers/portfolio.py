@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_async_session
 from app.models.holding import Holding
@@ -39,7 +40,7 @@ async def portfolio_overview(
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     """Render the portfolio overview page."""
-    rows_result = await db.execute(select(Holding).join(Holding.stock))
+    rows_result = await db.execute(select(Holding).options(selectinload(Holding.stock)))
     holdings = rows_result.scalars().all()
 
     holding_rows: list[HoldingRow] = []
