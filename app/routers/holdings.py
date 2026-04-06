@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_session
 from app.models.holding import Holding
 from app.models.stock import Stock
-from app.schemas.holdings import HoldingCreate, HoldingResponse, HoldingUpdate
+from app.schemas.holdings import HoldingCreate, HoldingResponse, HoldingUpdate, PortfolioSummary
+from app.services.portfolio_service import PortfolioService
 
 router = APIRouter(prefix="/holdings", tags=["holdings"])
 
@@ -21,6 +22,14 @@ async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
     return result
+
+
+@router.get("/summary", response_model=PortfolioSummary)
+async def get_holdings_summary(
+    db: AsyncSession = _DB,
+) -> PortfolioSummary:
+    """Return current market value per holding and total portfolio value."""
+    return await PortfolioService().get_summary(db)
 
 
 @router.get("", response_model=list[HoldingResponse])
