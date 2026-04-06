@@ -91,8 +91,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-# Module-level instance used by uvicorn / gunicorn
-app: FastAPI = create_app()
+# Module-level instance used by uvicorn / gunicorn.
+# Declared without assignment so that merely importing this module (e.g. in
+# tests) does not trigger Settings validation.  The attribute is created on
+# first access via __getattr__ below.
+app: FastAPI
+
+
+def __getattr__(name: str) -> FastAPI:
+    if name == "app":
+        import sys
+
+        instance = create_app()
+        sys.modules[__name__].app = instance
+        return instance
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def run() -> None:
