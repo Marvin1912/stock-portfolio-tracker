@@ -4,7 +4,7 @@
     hx-post="/htmx/holdings"
     hx-target="#holdings-tbody"
     hx-swap="beforeend"
-    hx-on::after-request="if(event.detail.successful) this.closest('#add-holding-form').remove()">
+    hx-on::after-request="if(event.detail.successful && event.detail.elt === this) this.closest('#add-holding-form').remove()">
     {% if error %}
     <div class="form-error">{{ error }}</div>
     {% endif %}
