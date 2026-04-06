@@ -25,6 +25,7 @@ _DB = Depends(get_async_session)
 
 @dataclass
 class HoldingRow:
+    id: int
     ticker: str
     name: str
     currency: str
@@ -53,6 +54,7 @@ async def portfolio_overview(
 
         holding_rows.append(
             HoldingRow(
+                id=h.id,
                 ticker=stock.ticker,
                 name=stock.name,
                 currency=stock.currency,

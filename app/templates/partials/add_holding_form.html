@@ -1,0 +1,50 @@
+<div id="add-holding-form" class="add-form-container">
+  <h2>Add Holding</h2>
+  <form
+    hx-post="/htmx/holdings"
+    hx-target="#holdings-tbody"
+    hx-swap="beforeend"
+    hx-on::after-request="if(event.detail.successful) this.closest('#add-holding-form').remove()">
+    {% if error %}
+    <div class="form-error">{{ error }}</div>
+    {% endif %}
+    <div class="form-row">
+      <label for="ticker">Ticker</label>
+      <div class="input-group">
+        <input
+          type="text"
+          id="ticker"
+          name="ticker"
+          value="{{ ticker or '' }}"
+          placeholder="e.g. AAPL"
+          required
+          autocomplete="off"
+          hx-get="/htmx/validate-ticker"
+          hx-trigger="blur, input changed delay:600ms"
+          hx-include="[name='ticker']"
+          hx-target="#ticker-hint"
+          hx-swap="innerHTML">
+        <span id="ticker-hint"></span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="quantity">Quantity</label>
+      <input
+        type="number"
+        id="quantity"
+        name="quantity"
+        value="{{ quantity or '' }}"
+        min="0.00000001"
+        step="any"
+        placeholder="e.g. 10"
+        required>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-save">Add</button>
+      <button
+        type="button"
+        onclick="document.getElementById('add-holding-form').remove()"
+        class="btn-cancel">Cancel</button>
+    </div>
+  </form>
+</div>

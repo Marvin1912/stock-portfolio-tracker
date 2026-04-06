@@ -1,0 +1,31 @@
+<tr id="holding-row-{{ holding.id }}" class="editing">
+  <td>{{ holding.name }} ({{ holding.ticker }})</td>
+  <td class="number" colspan="2">
+    <form
+      hx-put="/htmx/holdings/{{ holding.id }}"
+      hx-target="#holding-row-{{ holding.id }}"
+      hx-swap="outerHTML"
+      class="inline-form">
+      {% if error %}
+      <span class="form-error">{{ error }}</span>
+      {% endif %}
+      <input
+        type="number"
+        name="quantity"
+        value="{{ holding.quantity }}"
+        min="0.00000001"
+        step="any"
+        required
+        class="qty-input"
+        autofocus>
+      <button type="submit" class="btn-save">Save</button>
+      <button
+        type="button"
+        hx-get="/htmx/holdings/{{ holding.id }}/row"
+        hx-target="#holding-row-{{ holding.id }}"
+        hx-swap="outerHTML"
+        class="btn-cancel">Cancel</button>
+    </form>
+  </td>
+  <td class="actions"></td>
+</tr>
