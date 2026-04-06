@@ -1,3 +1,5 @@
 """Pydantic request/response schemas package."""
 
-__all__: list[str] = []
+from app.schemas.holdings import HoldingCreate, HoldingResponse, HoldingUpdate
+
+__all__ = ["HoldingCreate", "HoldingResponse", "HoldingUpdate"]
