@@ -18,7 +18,7 @@ class StockInfo:
 
 def _fetch_stock_info_sync(ticker: str) -> StockInfo | None:
     """Synchronous yfinance call — run in a thread executor."""
-    import yfinance as yf  # local import to keep startup fast
+    import yfinance as yf  # type: ignore[import-untyped]  # no stubs available
 
     t = yf.Ticker(ticker.upper())
     info = t.info
