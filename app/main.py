@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
 from app.database import close_db, init_db
-from app.routers import health, holdings
+from app.routers import health, holdings, portfolio
 
 __all__ = ["app", "create_app"]
 
@@ -81,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Routers
     # ------------------------------------------------------------------
     app.include_router(health.router)
+    app.include_router(portfolio.router)
     app.include_router(holdings.router, prefix="/api/v1")
     # Future routers (uncomment as implemented):
     # app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["auth"])
