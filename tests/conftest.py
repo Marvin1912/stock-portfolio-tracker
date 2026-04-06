@@ -26,7 +26,7 @@ def test_settings() -> Settings:
     Override DATABASE_URL / DATABASE_SYNC_URL via environment variables
     in CI to point at a real test database.
     """
-    return Settings(  # type: ignore[call-arg]
+    return Settings(
         app_env="development",
         app_debug=True,
         secret_key="test-secret-key-that-is-long-enough-32chars",

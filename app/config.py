@@ -99,4 +99,4 @@ def get_settings() -> Settings:
     Import and call this function instead of instantiating Settings
     directly so that tests can override it via dependency injection.
     """
-    return Settings()  # type: ignore[call-arg]
+    return Settings()

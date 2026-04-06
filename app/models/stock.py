@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.holding import Holding
 
 
 class Stock(Base):
@@ -22,6 +27,6 @@ class Stock(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), nullable=False)
 
-    holdings: Mapped[list["Holding"]] = relationship(  # noqa: F821
+    holdings: Mapped[list[Holding]] = relationship(
         "Holding", back_populates="stock", cascade="all, delete-orphan"
     )
