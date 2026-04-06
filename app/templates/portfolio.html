@@ -4,23 +4,64 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portfolio Overview</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
   <style>
-    body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { margin-bottom: 1.5rem; }
-    table { width: 100%; border-collapse: collapse; }
+    body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
     th, td { padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid #ddd; }
     th { background: #f4f4f4; font-weight: 600; }
-    tr:hover { background: #fafafa; }
-    td.number { text-align: right; }
-    th.number { text-align: right; }
+    th.number, td.number { text-align: right; }
+    th.actions, td.actions { text-align: right; width: 130px; }
+    tr:hover:not(.editing) { background: #fafafa; }
     .total-row { font-weight: bold; border-top: 2px solid #333; }
     .na { color: #999; }
     a { color: #0066cc; text-decoration: none; }
     a:hover { text-decoration: underline; }
+
+    /* Buttons */
+    button { cursor: pointer; border: none; border-radius: 4px; padding: 0.3rem 0.7rem; font-size: 0.85rem; }
+    .btn-add  { background: #0066cc; color: #fff; padding: 0.4rem 1rem; font-size: 0.9rem; margin-bottom: 1rem; }
+    .btn-add:hover  { background: #0055aa; }
+    .btn-edit   { background: #e8f0fe; color: #0055cc; }
+    .btn-edit:hover { background: #d0e0fc; }
+    .btn-save   { background: #2e7d32; color: #fff; }
+    .btn-save:hover { background: #256428; }
+    .btn-cancel { background: #eee; color: #333; }
+    .btn-cancel:hover { background: #ddd; }
+    .btn-delete { background: #fdecea; color: #c62828; margin-left: 0.3rem; }
+    .btn-delete:hover { background: #f9c9c5; }
+
+    /* Add form */
+    .add-form-container { border: 1px solid #ddd; border-radius: 6px; padding: 1.2rem 1.5rem; margin-bottom: 1.5rem; background: #fafafa; }
+    .add-form-container h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+    .form-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .form-row label { min-width: 70px; font-weight: 600; font-size: 0.9rem; }
+    .form-row input { padding: 0.35rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; width: 160px; }
+    .input-group { display: flex; align-items: center; gap: 0.5rem; }
+    .form-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+    .form-error { color: #c62828; font-size: 0.85rem; margin-bottom: 0.5rem; }
+
+    /* Inline validation hint */
+    .ticker-valid  { color: #2e7d32; font-size: 0.85rem; }
+    .ticker-invalid { color: #c62828; font-size: 0.85rem; }
+
+    /* Inline edit */
+    .inline-form { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
+    .qty-input { width: 100px; padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .editing td { background: #fffde7; }
   </style>
 </head>
 <body>
   <h1>Portfolio Overview</h1>
+
+  <button
+    class="btn-add"
+    hx-get="/htmx/holdings/add-form"
+    hx-target="#add-form-slot"
+    hx-swap="innerHTML">+ Add Holding</button>
+
+  <div id="add-form-slot"></div>
 
   {% if holdings %}
   <table>
@@ -29,11 +70,12 @@
         <th>Stock</th>
         <th class="number">Quantity</th>
         <th class="number">Current Value</th>
+        <th class="actions"></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="holdings-tbody">
       {% for row in holdings %}
-      <tr>
+      <tr id="holding-row-{{ row.id }}">
         <td><a href="/stocks/{{ row.ticker }}">{{ row.name }} ({{ row.ticker }})</a></td>
         <td class="number">{{ row.quantity }}</td>
         <td class="number">
@@ -43,12 +85,25 @@
             <span class="na">N/A</span>
           {% endif %}
         </td>
+        <td class="actions">
+          <button
+            hx-get="/htmx/holdings/{{ row.id }}/edit-form"
+            hx-target="#holding-row-{{ row.id }}"
+            hx-swap="outerHTML"
+            class="btn-edit">Edit</button>
+          <button
+            hx-delete="/htmx/holdings/{{ row.id }}"
+            hx-target="#holding-row-{{ row.id }}"
+            hx-swap="outerHTML"
+            hx-confirm="Remove {{ row.ticker }} from your portfolio?"
+            class="btn-delete">Delete</button>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr class="total-row">
-        <td colspan="2">Total Portfolio Value</td>
+        <td colspan="3">Total Portfolio Value</td>
         <td class="number">
           {% if total_value is not none %}
             {{ "%.2f"|format(total_value) }}
@@ -60,7 +115,18 @@
     </tfoot>
   </table>
   {% else %}
-  <p>No holdings found. Add stocks to your portfolio via the API.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Stock</th>
+        <th class="number">Quantity</th>
+        <th class="number">Current Value</th>
+        <th class="actions"></th>
+      </tr>
+    </thead>
+    <tbody id="holdings-tbody"></tbody>
+  </table>
+  <p>No holdings yet. Use the button above to add your first holding.</p>
   {% endif %}
 </body>
 </html>
