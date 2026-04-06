@@ -26,3 +26,17 @@ class HoldingResponse(BaseModel):
     ticker: str
     name: str
     quantity: Decimal
+
+
+class HoldingSummaryItem(BaseModel):
+    id: int
+    ticker: str
+    name: str
+    quantity: Decimal
+    current_price: Decimal | None
+    current_value: Decimal | None
+
+
+class PortfolioSummary(BaseModel):
+    holdings: list[HoldingSummaryItem]
+    total_value: Decimal | None
