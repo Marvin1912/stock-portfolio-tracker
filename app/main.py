@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
-from app.database import close_db, init_db, build_session_factory, build_engine
+from app.database import build_engine, build_session_factory, close_db, init_db
 from app.routers import health, holdings, htmx, portfolio
 
 __all__ = ["app", "create_app"]
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 async def _refresh_price_cache_job(session_factory: object) -> None:
     """Scheduled job: refresh price cache for all tracked tickers."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
     from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from app.models.stock import Stock
     from app.services.price_service import refresh_price_cache
