@@ -9,7 +9,6 @@ Alembic inspects it.
 
 from __future__ import annotations
 
-import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -29,6 +28,9 @@ config = context.config
 # Inject the sync database URL from pydantic-settings at runtime.
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_sync_url)
+
+# Read the search_path configured in alembic.ini.
+_search_path = config.get_main_option("search_path", "costs")
 
 # Attach Python logging configuration from alembic.ini.
 if config.config_file_name is not None:
@@ -51,6 +53,8 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
+        include_schemas=True,
+        version_table_schema=_search_path,
     )
 
     with context.begin_transaction():
@@ -63,6 +67,7 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"options": f"-csearch_path={_search_path}"},
     )
 
     with connectable.connect() as connection:
@@ -71,6 +76,8 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
+            include_schemas=True,
+            version_table_schema=_search_path,
         )
 
         with context.begin_transaction():
