@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Overview</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background: #f4f4f4; font-weight: 600; }
+    tr:hover { background: #fafafa; }
+    td.number { text-align: right; }
+    th.number { text-align: right; }
+    .total-row { font-weight: bold; border-top: 2px solid #333; }
+    .na { color: #999; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Portfolio Overview</h1>
+
+  {% if holdings %}
+  <table>
+    <thead>
+      <tr>
+        <th>Stock</th>
+        <th class="number">Quantity</th>
+        <th class="number">Current Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in holdings %}
+      <tr>
+        <td><a href="/stocks/{{ row.ticker }}">{{ row.name }} ({{ row.ticker }})</a></td>
+        <td class="number">{{ row.quantity }}</td>
+        <td class="number">
+          {% if row.current_value is not none %}
+            {{ "%.2f"|format(row.current_value) }} {{ row.currency }}
+          {% else %}
+            <span class="na">N/A</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="2">Total Portfolio Value</td>
+        <td class="number">
+          {% if total_value is not none %}
+            {{ "%.2f"|format(total_value) }}
+          {% else %}
+            <span class="na">N/A</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+  {% else %}
+  <p>No holdings found. Add stocks to your portfolio via the API.</p>
+  {% endif %}
+</body>
+</html>
