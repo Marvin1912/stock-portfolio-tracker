@@ -41,6 +41,9 @@ dependencies = [
     # Stock data
     "yfinance>=0.2.40",
 
+    # Charting
+    "plotly>=5.0.0",
+
     # Auth
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
@@ -83,6 +86,10 @@ ignore = []
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "plotly.*"
+ignore_missing_imports = true
 
 # --- Pytest ---
 [tool.pytest.ini_options]

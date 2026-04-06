@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portfolio Overview</title>
   <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
     h1 { margin-bottom: 1rem; }
@@ -46,6 +47,10 @@
     .ticker-valid  { color: #2e7d32; font-size: 0.85rem; }
     .ticker-invalid { color: #c62828; font-size: 0.85rem; }
 
+    /* Allocation chart */
+    .chart-section { margin-bottom: 2rem; }
+    .chart-section h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
+
     /* Inline edit */
     .inline-form { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
     .qty-input { width: 100px; padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
@@ -62,6 +67,25 @@
     hx-swap="innerHTML">+ Add Holding</button>
 
   <div id="add-form-slot"></div>
+
+  {% if total_value is not none %}
+  <div class="chart-section">
+    <h2>Portfolio Allocation</h2>
+    <div id="allocation-chart" style="height: 350px;"></div>
+  </div>
+  <script>
+    (async () => {
+      const resp = await fetch('/api/v1/holdings/chart/allocation');
+      const fig = await resp.json();
+      if (fig && fig.data) {
+        Plotly.newPlot('allocation-chart', fig.data, fig.layout, {
+          responsive: true,
+          displayModeBar: false,
+        });
+      }
+    })();
+  </script>
+  {% endif %}
 
   {% if holdings %}
   <table>
