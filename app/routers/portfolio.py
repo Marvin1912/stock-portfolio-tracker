@@ -62,9 +62,9 @@ async def portfolio_overview(
         )
 
     return templates.TemplateResponse(
-        "portfolio.html",
-        {
-            "request": request,
+        request=request,
+        name="portfolio.html",
+        context={
             "holdings": holding_rows,
             "total_value": total_value,
         },
