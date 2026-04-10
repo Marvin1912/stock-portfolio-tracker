@@ -82,7 +82,7 @@ class PortfolioService:
         performance: list[tuple[datetime.date, Decimal]] = []
         for date in sorted(prices_by_date):
             day_prices = prices_by_date[date]
-            total = sum(qty_by_ticker[t] * p for t, p in day_prices.items())
+            total = sum((qty_by_ticker[t] * p for t, p in day_prices.items()), Decimal("0"))
             performance.append((date, total))
 
         return performance
