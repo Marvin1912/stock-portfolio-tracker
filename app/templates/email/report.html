@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monthly Portfolio Report – {{ report.month_label }}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f7;
+      margin: 0;
+      padding: 0;
+      color: #333333;
+    }
+    .wrapper {
+      max-width: 680px;
+      margin: 32px auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .header {
+      background-color: #1a1a2e;
+      color: #ffffff;
+      padding: 32px 40px;
+    }
+    .header h1 {
+      margin: 0 0 4px 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .header p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.7;
+    }
+    .summary {
+      padding: 28px 40px;
+      border-bottom: 1px solid #e8e8e8;
+    }
+    .summary h2 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888888;
+    }
+    .kpi-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .kpi {
+      flex: 1;
+      min-width: 140px;
+    }
+    .kpi .label {
+      font-size: 12px;
+      color: #888888;
+      margin-bottom: 4px;
+    }
+    .kpi .value {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .kpi .value.positive { color: #22a06b; }
+    .kpi .value.negative { color: #de350b; }
+    .kpi .value.neutral  { color: #333333; }
+    .breakdown {
+      padding: 28px 40px;
+    }
+    .breakdown h2 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888888;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 2px solid #e8e8e8;
+      color: #888888;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    .ticker { font-weight: 700; }
+    .name   { color: #666666; font-size: 13px; }
+    .num    { text-align: right; }
+    .positive { color: #22a06b; }
+    .negative { color: #de350b; }
+    .na       { color: #bbbbbb; }
+    .footer {
+      padding: 20px 40px;
+      background-color: #f4f4f7;
+      font-size: 12px;
+      color: #aaaaaa;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <div class="header">
+      <h1>Monthly Portfolio Report</h1>
+      <p>{{ report.period_start.strftime("%d %b %Y") }} – {{ report.period_end.strftime("%d %b %Y") }}</p>
+    </div>
+
+    <div class="summary">
+      <h2>Portfolio Overview</h2>
+      <div class="kpi-row">
+
+        <div class="kpi">
+          <div class="label">Value on {{ report.period_start.strftime("%-d %b") }}</div>
+          <div class="value neutral">
+            {% if report.total_value_1st is not none %}
+              €{{ "%.2f"|format(report.total_value_1st) }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="kpi">
+          <div class="label">Value on {{ report.period_end.strftime("%-d %b") }}</div>
+          <div class="value neutral">
+            {% if report.total_value_last is not none %}
+              €{{ "%.2f"|format(report.total_value_last) }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="kpi">
+          <div class="label">Monthly Delta</div>
+          {% if report.total_delta_eur is not none %}
+            {% set sign = "+" if report.total_delta_eur >= 0 else "" %}
+            {% set css  = "positive" if report.total_delta_eur >= 0 else "negative" %}
+            <div class="value {{ css }}">
+              {{ sign }}€{{ "%.2f"|format(report.total_delta_eur) }}
+            </div>
+          {% else %}
+            <div class="value neutral">—</div>
+          {% endif %}
+        </div>
+
+        <div class="kpi">
+          <div class="label">Delta %</div>
+          {% if report.total_delta_pct is not none %}
+            {% set sign = "+" if report.total_delta_pct >= 0 else "" %}
+            {% set css  = "positive" if report.total_delta_pct >= 0 else "negative" %}
+            <div class="value {{ css }}">{{ sign }}{{ report.total_delta_pct }}%</div>
+          {% else %}
+            <div class="value neutral">—</div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="breakdown">
+      <h2>Per-Stock Breakdown</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Stock</th>
+            <th class="num">Qty</th>
+            <th class="num">Price 1st</th>
+            <th class="num">Price Last</th>
+            <th class="num">Delta (€)</th>
+            <th class="num">Delta (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in report.lines %}
+          <tr>
+            <td>
+              <div class="ticker">{{ line.ticker }}</div>
+              <div class="name">{{ line.name }}</div>
+            </td>
+            <td class="num">{{ line.quantity }}</td>
+            <td class="num">
+              {% if line.price_1st is not none %}€{{ "%.2f"|format(line.price_1st) }}{% else %}<span class="na">—</span>{% endif %}
+            </td>
+            <td class="num">
+              {% if line.price_last is not none %}€{{ "%.2f"|format(line.price_last) }}{% else %}<span class="na">—</span>{% endif %}
+            </td>
+            <td class="num">
+              {% if line.delta_eur is not none %}
+                {% set sign = "+" if line.delta_eur >= 0 else "" %}
+                {% set css  = "positive" if line.delta_eur >= 0 else "negative" %}
+                <span class="{{ css }}">{{ sign }}€{{ "%.2f"|format(line.delta_eur) }}</span>
+              {% else %}
+                <span class="na">—</span>
+              {% endif %}
+            </td>
+            <td class="num">
+              {% if line.delta_pct is not none %}
+                {% set sign = "+" if line.delta_pct >= 0 else "" %}
+                {% set css  = "positive" if line.delta_pct >= 0 else "negative" %}
+                <span class="{{ css }}">{{ sign }}{{ line.delta_pct }}%</span>
+              {% else %}
+                <span class="na">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      Generated automatically by Stock Portfolio Tracker &middot; {{ report.month_label }}
+    </div>
+
+  </div>
+</body>
+</html>
