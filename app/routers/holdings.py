@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_async_session
 from app.models.holding import Holding
@@ -20,7 +21,7 @@ _DB = Depends(get_async_session)
 
 
 async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
-    result = await db.get(Holding, holding_id)
+    result = await db.get(Holding, holding_id, options=[selectinload(Holding.stock)])
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
     return result
@@ -103,7 +104,7 @@ async def list_holdings(
     db: AsyncSession = _DB,
 ) -> list[HoldingResponse]:
     """Return all holdings with ticker, name, and quantity."""
-    rows = await db.execute(select(Holding).join(Holding.stock))
+    rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
     holdings = rows.scalars().all()
     return [
         HoldingResponse(

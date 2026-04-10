@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.holding import Holding
 from app.models.price_cache import PriceCache
@@ -22,7 +23,7 @@ class PortfolioService:
         Holdings without a ``current_price`` contribute ``None`` for their
         value and are excluded from the ``total_value`` sum.
         """
-        rows = await db.execute(select(Holding).join(Holding.stock))
+        rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
         holdings = rows.scalars().all()
 
         items: list[HoldingSummaryItem] = []
@@ -56,7 +57,7 @@ class PortfolioService:
         sum(quantity × close_price) across all holdings that have a cached
         price on that date.  Dates with no price data are omitted.
         """
-        rows = await db.execute(select(Holding).join(Holding.stock))
+        rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
         holdings = rows.scalars().all()
 
         if not holdings:
