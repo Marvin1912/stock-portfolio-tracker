@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ stock.name }} ({{ stock.ticker }})</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 0.25rem; }
+    .subtitle { color: #555; margin-bottom: 2rem; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Summary card */
+    .summary-card { border: 1px solid #ddd; border-radius: 6px; padding: 1.2rem 1.5rem; margin-bottom: 2rem; background: #fafafa; }
+    .summary-card h2 { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+    .summary-item { display: flex; flex-direction: column; }
+    .summary-label { font-size: 0.8rem; color: #777; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; }
+    .summary-value { font-size: 1.1rem; font-weight: 600; }
+    .na { color: #999; font-weight: normal; }
+
+    /* Chart */
+    .chart-section { margin-bottom: 2rem; }
+    .chart-section h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
+    .no-data { color: #777; font-style: italic; }
+  </style>
+</head>
+<body>
+  <p><a href="/">&larr; Back to Portfolio</a></p>
+
+  <h1>{{ stock.name }}</h1>
+  <p class="subtitle">{{ stock.ticker }} &middot; {{ stock.currency }}</p>
+
+  <div class="summary-card">
+    <h2>Current Holding</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <span class="summary-label">Quantity</span>
+        <span class="summary-value">
+          {% if stock.quantity is not none %}
+            {{ stock.quantity }}
+          {% else %}
+            <span class="na">Not held</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Current Price</span>
+        <span class="summary-value">
+          {% if stock.current_price is not none %}
+            {{ "%.2f"|format(stock.current_price) }} {{ stock.currency }}
+          {% else %}
+            <span class="na">N/A</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Current Value</span>
+        <span class="summary-value">
+          {% if stock.current_value is not none %}
+            {{ "%.2f"|format(stock.current_value) }} {{ stock.currency }}
+          {% else %}
+            <span class="na">N/A</span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <h2>Price History (1Y)</h2>
+    <div id="price-history-chart" style="height: 300px;"></div>
+  </div>
+  <script>
+    (async () => {
+      const resp = await fetch('/api/v1/stocks/{{ stock.ticker }}/chart/price-history');
+      const fig = await resp.json();
+      if (fig && fig.data) {
+        Plotly.newPlot('price-history-chart', fig.data, fig.layout, {
+          responsive: true,
+          displayModeBar: false,
+        });
+      } else {
+        document.getElementById('price-history-chart').innerHTML =
+          '<p class="no-data">No price history available yet. Data is refreshed daily.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>
