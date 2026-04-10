@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.holding import Holding
+from app.models.price_cache import PriceCache
 from app.schemas.holdings import HoldingSummaryItem, PortfolioSummary
 
 
@@ -44,3 +46,43 @@ class PortfolioService:
             )
 
         return PortfolioSummary(holdings=items, total_value=total_value)
+
+    async def get_performance_history(
+        self, db: AsyncSession
+    ) -> list[tuple[datetime.date, Decimal]]:
+        """Return daily total portfolio values for the past year.
+
+        For each date in PriceCache, the portfolio value is calculated as
+        sum(quantity × close_price) across all holdings that have a cached
+        price on that date.  Dates with no price data are omitted.
+        """
+        rows = await db.execute(select(Holding).join(Holding.stock))
+        holdings = rows.scalars().all()
+
+        if not holdings:
+            return []
+
+        tickers = [h.stock.ticker for h in holdings]
+        qty_by_ticker = {h.stock.ticker: h.quantity for h in holdings}
+
+        one_year_ago = datetime.date.today() - datetime.timedelta(days=365)
+        price_rows = await db.execute(
+            select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
+            .where(
+                PriceCache.ticker.in_(tickers),
+                PriceCache.date >= one_year_ago,
+            )
+            .order_by(PriceCache.date)
+        )
+
+        prices_by_date: dict[datetime.date, dict[str, Decimal]] = {}
+        for ticker, date, close_price in price_rows:
+            prices_by_date.setdefault(date, {})[ticker] = close_price
+
+        performance: list[tuple[datetime.date, Decimal]] = []
+        for date in sorted(prices_by_date):
+            day_prices = prices_by_date[date]
+            total = sum(qty_by_ticker[t] * p for t, p in day_prices.items())
+            performance.append((date, total))
+
+        return performance
