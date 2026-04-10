@@ -5,6 +5,7 @@ from __future__ import annotations
 import tempfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse
@@ -99,13 +100,13 @@ async def import_pdf_preview(
 @router.post("/pdf/confirm", response_class=HTMLResponse)
 async def import_pdf_confirm(
     request: Request,
+    tickers: Annotated[list[str], Form()],
+    quantities: Annotated[list[str], Form()],
     db: AsyncSession = _DB,
-    tickers: list[str] = Form(...),
-    quantities: list[str] = Form(...),
 ) -> HTMLResponse:
     """Commit the previewed holdings into the database."""
     pairs: list[tuple[str, Decimal]] = []
-    for ticker, qty_str in zip(tickers, quantities):
+    for ticker, qty_str in zip(tickers, quantities, strict=False):
         try:
             pairs.append((ticker.strip().upper(), Decimal(qty_str)))
         except InvalidOperation:
