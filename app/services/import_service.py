@@ -40,6 +40,21 @@ class ImportService:
             successfully processed (i.e. had a matching Stock record).
         """
         pairs = parser.extract(pdf_path)
+        return await self.import_from_holdings(pairs, db)
+
+    async def import_from_holdings(
+        self,
+        pairs: list[tuple[str, Decimal]],
+        db: AsyncSession,
+    ) -> list[tuple[str, Decimal]]:
+        """Upsert a list of ``(ticker, quantity)`` pairs into the database.
+
+        Returns
+        -------
+        list[tuple[str, Decimal]]
+            ``(ticker, quantity_added)`` pairs for every ticker that was
+            successfully processed (i.e. had a matching Stock record).
+        """
         processed: list[tuple[str, Decimal]] = []
 
         for ticker, qty in pairs:
