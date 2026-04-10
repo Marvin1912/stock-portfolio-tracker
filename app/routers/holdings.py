@@ -26,6 +26,39 @@ async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
     return result
 
 
+@router.get("/chart/performance")
+async def get_performance_chart(
+    db: AsyncSession = _DB,
+) -> JSONResponse:
+    """Return a Plotly line chart of total portfolio value over the past year."""
+    performance = await PortfolioService().get_performance_history(db)
+
+    if not performance:
+        return JSONResponse(content={})
+
+    dates = [str(d) for d, _ in performance]
+    values = [float(v) for _, v in performance]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=dates,
+            y=values,
+            mode="lines",
+            line={"color": "#0066cc", "width": 2},
+            hovertemplate="%{x}<br>Value: %{y:,.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        margin={"t": 20, "b": 40, "l": 60, "r": 20},
+        xaxis={"showgrid": False},
+        yaxis={"tickformat": ",.0f", "showgrid": True, "gridcolor": "#eee"},
+        hovermode="x unified",
+        plot_bgcolor="#fff",
+        paper_bgcolor="#fff",
+    )
+    return JSONResponse(content=fig.to_dict())
+
+
 @router.get("/chart/allocation")
 async def get_allocation_chart(
     db: AsyncSession = _DB,
