@@ -22,13 +22,21 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Add as nullable first so existing rows don't need an immediate value.
     op.add_column(
         "stock",
-        sa.Column("wkn", sa.String(length=6), nullable=False, server_default=""),
+        sa.Column("wkn", sa.String(length=6), nullable=True),
         schema="costs",
     )
-    # Remove the temporary server default after the column is added
-    op.alter_column("stock", "wkn", server_default=None, schema="costs")
+
+    # Backfill existing rows with a unique placeholder derived from the row id
+    # (e.g. id=1 → "000001").  Admins should update these to real WKNs.
+    op.execute(
+        "UPDATE costs.stock SET wkn = LPAD(id::text, 6, '0') WHERE wkn IS NULL"
+    )
+
+    # Now that every row has a value, enforce NOT NULL and add the unique index.
+    op.alter_column("stock", "wkn", nullable=False, schema="costs")
     op.create_unique_constraint("uq_stock_wkn", "stock", ["wkn"], schema="costs")
 
 
