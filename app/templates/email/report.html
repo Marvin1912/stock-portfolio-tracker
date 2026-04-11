@@ -96,7 +96,7 @@
       vertical-align: middle;
     }
     tr:last-child td { border-bottom: none; }
-    .ticker { font-weight: 700; }
+    .wkn { font-weight: 700; }
     .name   { color: #666666; font-size: 13px; }
     .num    { text-align: right; }
     .positive { color: #22a06b; }
@@ -189,7 +189,7 @@
           {% for line in report.lines %}
           <tr>
             <td>
-              <div class="ticker">{{ line.wkn }}</div>
+              <div class="wkn">{{ line.wkn }}</div>
               <div class="name">{{ line.name }}</div>
             </td>
             <td class="num">{{ line.quantity }}</td>

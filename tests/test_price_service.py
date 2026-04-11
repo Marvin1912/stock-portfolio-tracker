@@ -11,7 +11,7 @@ from app.services.price_service import StockPriceService
 from app.services.stock_lookup import StockInfo
 
 _APPLE = StockInfo(
-    ticker="AAPL",
+    wkn="AAPL",
     name="Apple Inc.",
     currency="USD",
     current_price=Decimal("175.00"),
@@ -52,12 +52,12 @@ async def test_get_company_name_unknown_ticker(service: StockPriceService) -> No
 
 
 @pytest.mark.asyncio
-async def test_validate_ticker_valid(service: StockPriceService) -> None:
+async def test_validate_wkn_valid(service: StockPriceService) -> None:
     with patch("app.services.price_service.fetch_stock_info", AsyncMock(return_value=_APPLE)):
-        assert await service.validate_ticker("AAPL") is True
+        assert await service.validate_wkn("AAPL") is True
 
 
 @pytest.mark.asyncio
-async def test_validate_ticker_invalid(service: StockPriceService) -> None:
+async def test_validate_wkn_invalid(service: StockPriceService) -> None:
     with patch("app.services.price_service.fetch_stock_info", AsyncMock(return_value=None)):
-        assert await service.validate_ticker("INVALID") is False
+        assert await service.validate_wkn("INVALID") is False

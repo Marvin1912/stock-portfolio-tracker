@@ -103,7 +103,7 @@ async def get_holdings_summary(
 async def list_holdings(
     db: AsyncSession = _DB,
 ) -> list[HoldingResponse]:
-    """Return all holdings with ticker, name, and quantity."""
+    """Return all holdings with WKN, name, and quantity."""
     rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
     holdings = rows.scalars().all()
     return [

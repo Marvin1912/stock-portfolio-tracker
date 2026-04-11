@@ -16,12 +16,12 @@ class PriceCache(Base):
 
     __tablename__ = "price_cache"
     __table_args__ = (
-        UniqueConstraint("ticker", "date", name="uq_price_cache_ticker_date"),
+        UniqueConstraint("wkn", "date", name="uq_price_cache_wkn_date"),
         {"schema": "costs"},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+    wkn: Mapped[str] = mapped_column(String(20), nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     close_price: Mapped[Decimal] = mapped_column(
         Numeric(precision=18, scale=4), nullable=False

@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_session
 from app.models.holding import Holding
 from app.models.stock import Stock
-from app.services.stock_lookup import fetch_stock_info
 
 router = APIRouter(prefix="/htmx", tags=["htmx"])
 
@@ -41,7 +40,6 @@ def _render(request: Request, name: str, context: dict) -> HTMLResponse:  # type
 async def validate_wkn(
     request: Request,
     wkn: str = "",
-    ticker: str = "",
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     """Return an inline validation hint for the WKN field."""
@@ -53,18 +51,10 @@ async def validate_wkn(
     if not _WKN_RE.match(wkn):
         return _render(request, "partials/wkn_hint.html", {"valid": False, "name": None})
 
-    # Check DB first (fast path)
     result = await db.execute(select(Stock).where(Stock.wkn == wkn))
     stock = result.scalar_one_or_none()
     if stock:
         return _render(request, "partials/wkn_hint.html", {"valid": True, "name": stock.name})
-
-    # If not in DB, validate via yfinance using the provided ticker
-    ticker = ticker.strip().upper()
-    if ticker:
-        info = await fetch_stock_info(ticker)
-        if info:
-            return _render(request, "partials/wkn_hint.html", {"valid": True, "name": info.name})
 
     return _render(request, "partials/wkn_hint.html", {"valid": False, "name": None})
 
@@ -83,12 +73,10 @@ async def add_holding_form(request: Request) -> HTMLResponse:
 async def htmx_create_holding(
     request: Request,
     wkn: str = Form(...),
-    ticker: str = Form(...),
     quantity: str = Form(...),
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     wkn = wkn.strip().upper()
-    ticker = ticker.strip().upper()
 
     if not _WKN_RE.match(wkn):
         return _render(
@@ -97,7 +85,6 @@ async def htmx_create_holding(
             {
                 "error": "WKN must be exactly 6 alphanumeric characters.",
                 "wkn": wkn,
-                "ticker": ticker,
                 "quantity": quantity,
             },
         )
@@ -113,37 +100,23 @@ async def htmx_create_holding(
             {
                 "error": "Quantity must be a positive number.",
                 "wkn": wkn,
-                "ticker": ticker,
                 "quantity": quantity,
             },
         )
 
-    # Resolve or create the stock
     result = await db.execute(select(Stock).where(Stock.wkn == wkn))
     stock = result.scalar_one_or_none()
 
     if stock is None:
-        info = await fetch_stock_info(ticker)
-        if info is None:
-            return _render(
-                request,
-                "partials/add_holding_form.html",
-                {
-                    "error": f"Ticker '{ticker}' not found.",
-                    "wkn": wkn,
-                    "ticker": ticker,
-                    "quantity": quantity,
-                },
-            )
-        stock = Stock(
-            wkn=wkn,
-            ticker=info.ticker,
-            name=info.name,
-            currency=info.currency,
-            current_price=info.current_price,
+        return _render(
+            request,
+            "partials/add_holding_form.html",
+            {
+                "error": f"WKN '{wkn}' not found in portfolio.",
+                "wkn": wkn,
+                "quantity": quantity,
+            },
         )
-        db.add(stock)
-        await db.flush()
 
     holding = Holding(stock_id=stock.id, quantity=qty)
     db.add(holding)

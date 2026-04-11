@@ -96,7 +96,7 @@ async def get_price_history_chart(
     price_rows = await db.execute(
         select(PriceCache.date, PriceCache.close_price)
         .where(
-            PriceCache.ticker == stock.ticker,
+            PriceCache.wkn == stock.wkn,
             PriceCache.date >= one_year_ago,
         )
         .order_by(PriceCache.date)

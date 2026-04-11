@@ -15,10 +15,10 @@ def create_broker_pdf(output_path: Path) -> None:
     lines = [
         "BROKER PORTFOLIO STATEMENT 2024-01-15",
         "",
-        "Ticker          Quantity",
-        "AAPL            10.00000000",
-        "MSFT            5.50000000",
-        "GOOGL           2.75000000",
+        "WKN             Quantity",
+        "865985          10.00000000",
+        "870747          5.50000000",
+        "A14Y6F          2.75000000",
     ]
 
     ops: list[str] = ["BT", "/F1 10 Tf", "50 750 Td"]

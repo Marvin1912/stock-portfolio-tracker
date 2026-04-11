@@ -25,27 +25,26 @@ def test_generic_parser_extracts_all_rows() -> None:
     assert len(holdings) == 3
 
 
-def test_generic_parser_tickers_are_uppercase() -> None:
+def test_generic_parser_wkns_are_uppercase() -> None:
     parser = GenericTableParser()
-    for ticker, _ in parser.extract(FIXTURE_PDF):
-        assert ticker == ticker.upper()
-        assert ticker.strip() == ticker
+    for wkn, _ in parser.extract(FIXTURE_PDF):
+        assert wkn == wkn.upper()
+        assert wkn.strip() == wkn
 
 
 def test_generic_parser_quantities() -> None:
     parser = GenericTableParser()
-    by_ticker = dict(parser.extract(FIXTURE_PDF))
-    assert by_ticker["AAPL"] == Decimal("10.00000000")
-    assert by_ticker["MSFT"] == Decimal("5.50000000")
-    assert by_ticker["GOOGL"] == Decimal("2.75000000")
+    by_wkn = dict(parser.extract(FIXTURE_PDF))
+    assert by_wkn["865985"] == Decimal("10.00000000")
+    assert by_wkn["870747"] == Decimal("5.50000000")
+    assert by_wkn["A14Y6F"] == Decimal("2.75000000")
 
 
 def test_generic_parser_ignores_header_row() -> None:
-    """The 'Ticker  Quantity' header line must not appear in results."""
+    """The 'WKN  Quantity' header line must not appear in results."""
     parser = GenericTableParser()
-    tickers = {t for t, _ in parser.extract(FIXTURE_PDF)}
-    assert "Ticker" not in tickers
-    assert "TICKER" not in tickers
+    wkns = {w for w, _ in parser.extract(FIXTURE_PDF)}
+    assert "WKN" not in wkns
 
 
 # ---------------------------------------------------------------------------
@@ -53,10 +52,10 @@ def test_generic_parser_ignores_header_row() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_stock(ticker: str, stock_id: int = 1) -> MagicMock:
+def _make_stock(wkn: str, stock_id: int = 1) -> MagicMock:
     stock = MagicMock()
     stock.id = stock_id
-    stock.ticker = ticker
+    stock.wkn = wkn
     return stock
 
 

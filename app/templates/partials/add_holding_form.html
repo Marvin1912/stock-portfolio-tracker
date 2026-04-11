@@ -22,22 +22,11 @@
           autocomplete="off"
           hx-get="/htmx/validate-wkn"
           hx-trigger="blur, input changed delay:600ms"
-          hx-include="[name='wkn'],[name='ticker']"
+          hx-include="[name='wkn']"
           hx-target="#wkn-hint"
           hx-swap="innerHTML">
         <span id="wkn-hint"></span>
       </div>
-    </div>
-    <div class="form-row">
-      <label for="ticker">Ticker</label>
-      <input
-        type="text"
-        id="ticker"
-        name="ticker"
-        value="{{ ticker or '' }}"
-        placeholder="e.g. AAPL"
-        required
-        autocomplete="off">
     </div>
     <div class="form-row">
       <label for="quantity">Quantity</label>
