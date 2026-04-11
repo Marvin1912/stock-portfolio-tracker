@@ -31,7 +31,7 @@
   <p><a href="/">&larr; Back to Portfolio</a></p>
 
   <h1>{{ stock.name }}</h1>
-  <p class="subtitle">{{ stock.ticker }} &middot; {{ stock.currency }}</p>
+  <p class="subtitle">{{ stock.ticker }}</p>
 
   <div class="summary-card">
     <h2>Current Holding</h2>
@@ -50,7 +50,7 @@
         <span class="summary-label">Current Price</span>
         <span class="summary-value">
           {% if stock.current_price is not none %}
-            {{ "%.2f"|format(stock.current_price) }} {{ stock.currency }}
+            {{ "%.2f"|format(stock.current_price) }} &euro;
           {% else %}
             <span class="na">N/A</span>
           {% endif %}
@@ -60,7 +60,7 @@
         <span class="summary-label">Current Value</span>
         <span class="summary-value">
           {% if stock.current_value is not none %}
-            {{ "%.2f"|format(stock.current_value) }} {{ stock.currency }}
+            {{ "%.2f"|format(stock.current_value) }} &euro;
           {% else %}
             <span class="na">N/A</span>
           {% endif %}

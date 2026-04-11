@@ -122,7 +122,7 @@
         <td class="number">{{ row.quantity }}</td>
         <td class="number">
           {% if row.current_value is not none %}
-            {{ "%.2f"|format(row.current_value) }} {{ row.currency }}
+            {{ "%.2f"|format(row.current_value) }} &euro;
           {% else %}
             <span class="na">N/A</span>
           {% endif %}
@@ -148,7 +148,7 @@
         <td colspan="3">Total Portfolio Value</td>
         <td class="number">
           {% if total_value is not none %}
-            {{ "%.2f"|format(total_value) }}
+            {{ "%.2f"|format(total_value) }} &euro;
           {% else %}
             <span class="na">N/A</span>
           {% endif %}
