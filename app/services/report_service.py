@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class StockReportLine:
     """Per-stock data for the monthly report."""
 
-    ticker: str
+    wkn: str
     name: str
     quantity: Decimal
     price_1st: Decimal | None
@@ -124,7 +124,7 @@ class ReportService:
 
             lines.append(
                 StockReportLine(
-                    ticker=ticker,
+                    wkn=h.stock.wkn,
                     name=h.stock.name,
                     quantity=h.quantity,
                     price_1st=price_1st,

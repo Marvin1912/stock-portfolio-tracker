@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -23,6 +24,8 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 _DB = Depends(get_async_session)
 
+_WKN_RE = re.compile(r'^[A-Za-z0-9]{6}$')
+
 
 def _render(request: Request, name: str, context: dict) -> HTMLResponse:  # type: ignore[type-arg]
     context["request"] = request
@@ -30,33 +33,40 @@ def _render(request: Request, name: str, context: dict) -> HTMLResponse:  # type
 
 
 # ---------------------------------------------------------------------------
-# Ticker validation (inline, triggered on input)
+# WKN validation (inline, triggered on input)
 # ---------------------------------------------------------------------------
 
 
-@router.get("/validate-ticker", response_class=HTMLResponse)
-async def validate_ticker(
+@router.get("/validate-wkn", response_class=HTMLResponse)
+async def validate_wkn(
     request: Request,
+    wkn: str = "",
     ticker: str = "",
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
-    """Return an inline validation hint for the ticker field."""
-    ticker = ticker.strip().upper()
-    if not ticker:
+    """Return an inline validation hint for the WKN field."""
+    wkn = wkn.strip().upper()
+    if not wkn:
         return HTMLResponse("")
 
+    # Validate WKN format (exactly 6 alphanumeric characters)
+    if not _WKN_RE.match(wkn):
+        return _render(request, "partials/wkn_hint.html", {"valid": False, "name": None})
+
     # Check DB first (fast path)
-    result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+    result = await db.execute(select(Stock).where(Stock.wkn == wkn))
     stock = result.scalar_one_or_none()
     if stock:
-        return _render(request, "partials/ticker_hint.html", {"valid": True, "name": stock.name})
+        return _render(request, "partials/wkn_hint.html", {"valid": True, "name": stock.name})
 
-    # Fallback to yfinance
-    info = await fetch_stock_info(ticker)
-    if info:
-        return _render(request, "partials/ticker_hint.html", {"valid": True, "name": info.name})
+    # If not in DB, validate via yfinance using the provided ticker
+    ticker = ticker.strip().upper()
+    if ticker:
+        info = await fetch_stock_info(ticker)
+        if info:
+            return _render(request, "partials/wkn_hint.html", {"valid": True, "name": info.name})
 
-    return _render(request, "partials/ticker_hint.html", {"valid": False, "name": None})
+    return _render(request, "partials/wkn_hint.html", {"valid": False, "name": None})
 
 
 # ---------------------------------------------------------------------------
@@ -72,11 +82,26 @@ async def add_holding_form(request: Request) -> HTMLResponse:
 @router.post("/holdings", response_class=HTMLResponse)
 async def htmx_create_holding(
     request: Request,
+    wkn: str = Form(...),
     ticker: str = Form(...),
     quantity: str = Form(...),
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
+    wkn = wkn.strip().upper()
     ticker = ticker.strip().upper()
+
+    if not _WKN_RE.match(wkn):
+        return _render(
+            request,
+            "partials/add_holding_form.html",
+            {
+                "error": "WKN must be exactly 6 alphanumeric characters.",
+                "wkn": wkn,
+                "ticker": ticker,
+                "quantity": quantity,
+            },
+        )
+
     try:
         qty = Decimal(quantity)
         if qty <= 0:
@@ -87,13 +112,14 @@ async def htmx_create_holding(
             "partials/add_holding_form.html",
             {
                 "error": "Quantity must be a positive number.",
+                "wkn": wkn,
                 "ticker": ticker,
                 "quantity": quantity,
             },
         )
 
     # Resolve or create the stock
-    result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+    result = await db.execute(select(Stock).where(Stock.wkn == wkn))
     stock = result.scalar_one_or_none()
 
     if stock is None:
@@ -102,9 +128,15 @@ async def htmx_create_holding(
             return _render(
                 request,
                 "partials/add_holding_form.html",
-                {"error": f"Ticker '{ticker}' not found.", "ticker": ticker, "quantity": quantity},
+                {
+                    "error": f"Ticker '{ticker}' not found.",
+                    "wkn": wkn,
+                    "ticker": ticker,
+                    "quantity": quantity,
+                },
             )
         stock = Stock(
+            wkn=wkn,
             ticker=info.ticker,
             name=info.name,
             currency=info.currency,
@@ -125,7 +157,7 @@ async def htmx_create_holding(
         {
             "holding": {
                 "id": holding.id,
-                "ticker": stock.ticker,
+                "wkn": stock.wkn,
                 "name": stock.name,
                 "currency": stock.currency,
                 "quantity": qty,
@@ -159,7 +191,7 @@ async def holding_row(
         {
             "holding": {
                 "id": holding.id,
-                "ticker": stock.ticker,
+                "wkn": stock.wkn,
                 "name": stock.name,
                 "currency": stock.currency,
                 "quantity": holding.quantity,
@@ -190,7 +222,7 @@ async def edit_holding_form(
         {
             "holding": {
                 "id": holding.id,
-                "ticker": stock.ticker,
+                "wkn": stock.wkn,
                 "name": stock.name,
                 "currency": stock.currency,
                 "quantity": holding.quantity,
@@ -223,7 +255,7 @@ async def htmx_update_holding(
                 "error": "Quantity must be a positive number.",
                 "holding": {
                     "id": holding.id,
-                    "ticker": stock.ticker,
+                    "wkn": stock.wkn,
                     "name": stock.name,
                     "currency": stock.currency,
                     "quantity": holding.quantity,
@@ -243,7 +275,7 @@ async def htmx_update_holding(
         {
             "holding": {
                 "id": holding.id,
-                "ticker": stock.ticker,
+                "wkn": stock.wkn,
                 "name": stock.name,
                 "currency": stock.currency,
                 "quantity": qty,

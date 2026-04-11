@@ -12,13 +12,14 @@ from app.services.portfolio_service import PortfolioService
 
 def _make_holding(
     id: int,
-    ticker: str,
+    wkn: str,
     name: str,
     quantity: str,
     current_price: str | None,
 ) -> MagicMock:
     stock = MagicMock()
-    stock.ticker = ticker
+    stock.wkn = wkn
+    stock.ticker = wkn  # internal ticker (same value for test simplicity)
     stock.name = name
     stock.current_price = Decimal(current_price) if current_price else None
 
@@ -47,7 +48,7 @@ async def test_summary_single_holding_with_price() -> None:
     db = AsyncMock()
     result = MagicMock()
     result.scalars.return_value.all.return_value = [
-        _make_holding(1, "AAPL", "Apple Inc.", "10", "150.00")
+        _make_holding(1, "AAPL01", "Apple Inc.", "10", "150.00")
     ]
     db.execute = AsyncMock(return_value=result)
 
@@ -55,7 +56,7 @@ async def test_summary_single_holding_with_price() -> None:
 
     assert len(summary.holdings) == 1
     item = summary.holdings[0]
-    assert item.ticker == "AAPL"
+    assert item.wkn == "AAPL01"
     assert item.current_price == Decimal("150.00")
     assert item.current_value == Decimal("1500.00")
     assert summary.total_value == Decimal("1500.00")
@@ -66,7 +67,7 @@ async def test_summary_holding_without_price() -> None:
     db = AsyncMock()
     result = MagicMock()
     result.scalars.return_value.all.return_value = [
-        _make_holding(1, "AAPL", "Apple Inc.", "10", None)
+        _make_holding(1, "AAPL01", "Apple Inc.", "10", None)
     ]
     db.execute = AsyncMock(return_value=result)
 
@@ -82,9 +83,9 @@ async def test_summary_mixed_holdings() -> None:
     db = AsyncMock()
     result = MagicMock()
     result.scalars.return_value.all.return_value = [
-        _make_holding(1, "AAPL", "Apple Inc.", "10", "150.00"),
-        _make_holding(2, "TSLA", "Tesla Inc.", "5", None),
-        _make_holding(3, "MSFT", "Microsoft Corp.", "2", "300.00"),
+        _make_holding(1, "AAPL01", "Apple Inc.", "10", "150.00"),
+        _make_holding(2, "TSLA01", "Tesla Inc.", "5", None),
+        _make_holding(3, "MSFT01", "Microsoft Corp.", "2", "300.00"),
     ]
     db.execute = AsyncMock(return_value=result)
 

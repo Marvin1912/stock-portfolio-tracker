@@ -1,5 +1,5 @@
 <tr id="holding-row-{{ holding.id }}" class="editing">
-  <td>{{ holding.name }} ({{ holding.ticker }})</td>
+  <td>{{ holding.name }} ({{ holding.wkn }})</td>
   <td class="number" colspan="2">
     <form
       hx-put="/htmx/holdings/{{ holding.id }}"

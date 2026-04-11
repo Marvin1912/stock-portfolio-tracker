@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class HoldingBase(BaseModel):
@@ -12,7 +12,14 @@ class HoldingBase(BaseModel):
 
 
 class HoldingCreate(HoldingBase):
-    ticker: str = Field(..., min_length=1, max_length=20)
+    wkn: str = Field(..., min_length=6, max_length=6)
+
+    @field_validator("wkn")
+    @classmethod
+    def wkn_alphanumeric(cls, v: str) -> str:
+        if not v.isalnum():
+            raise ValueError("WKN must be exactly 6 alphanumeric characters")
+        return v.upper()
 
 
 class HoldingUpdate(BaseModel):
@@ -23,14 +30,14 @@ class HoldingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    ticker: str
+    wkn: str
     name: str
     quantity: Decimal
 
 
 class HoldingSummaryItem(BaseModel):
     id: int
-    ticker: str
+    wkn: str
     name: str
     quantity: Decimal
     current_price: Decimal | None

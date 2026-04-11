@@ -14,9 +14,9 @@ async def test_list_holdings_empty(require_db: None, client: AsyncClient) -> Non
     assert response.json() == []
 
 
-async def test_create_holding_unknown_ticker(require_db: None, client: AsyncClient) -> None:
+async def test_create_holding_unknown_wkn(require_db: None, client: AsyncClient) -> None:
     response = await client.post(
-        "/api/v1/holdings", json={"ticker": "UNKNOWN", "quantity": "10.0"}
+        "/api/v1/holdings", json={"wkn": "UNKNWN", "quantity": "10.0"}
     )
     assert response.status_code == 404
 

@@ -19,11 +19,13 @@ class Stock(Base):
 
     __tablename__ = "stock"
     __table_args__ = (
+        UniqueConstraint("wkn", name="uq_stock_wkn"),
         UniqueConstraint("ticker", name="uq_stock_ticker"),
         {"schema": "costs"},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    wkn: Mapped[str] = mapped_column(String(6), nullable=False)
     ticker: Mapped[str] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), nullable=False)
