@@ -4,58 +4,256 @@
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  /* ── Hero stats bar ─────────────────────────────────────────── */
+  .hero-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+    flex-wrap: wrap;
+  }
+  .hero-primary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .hero-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .hero-value {
+    font-family: var(--font-ui);
+    font-size: 2.6rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+  }
+  .hero-value .hero-currency {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--muted);
+    margin-left: 0.25rem;
+  }
+  .hero-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .hero-kpi-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .hero-kpi-value {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* ── Action bar ─────────────────────────────────────────────── */
+  .action-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Form slot slide-down ────────────────────────────────────── */
+  #add-form-slot {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 300ms ease;
+    margin-bottom: 0;
+  }
+  #add-form-slot.open {
+    max-height: 600px;
+    margin-bottom: 1.5rem;
+  }
+
+  /* ── Holdings table ─────────────────────────────────────────── */
+  .holdings-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 1.5rem;
+  }
+  .holdings-table thead tr {
+    background: var(--surface);
+  }
+  .holdings-table th {
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .holdings-table th.number,
+  .holdings-table td.number {
+    text-align: right;
+    font-family: var(--font-mono);
+  }
+  .holdings-table th.actions,
+  .holdings-table td.actions {
+    text-align: right;
+    width: 130px;
+  }
+  .holdings-table tbody tr {
+    transition: background 150ms ease;
+    position: relative;
+  }
+  .holdings-table tbody tr td:first-child {
+    border-left: 2px solid transparent;
+    transition: border-left-color 150ms ease;
+  }
+  .holdings-table tbody tr:not(.editing):hover td:first-child {
+    border-left-color: var(--accent);
+  }
+  .holdings-table tbody tr:not(.editing):hover td {
+    background: rgba(34, 211, 160, 0.03);
+  }
+  .holdings-table td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .holding-ticker {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--accent);
+  }
+  .holding-name {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 400;
+    margin-top: 0.1rem;
+  }
+  .holdings-table tfoot .total-row td {
+    border-top: 2px solid var(--border);
+    border-bottom: none;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding-top: 0.8rem;
+  }
+
+  /* ── Chart containers ───────────────────────────────────────── */
+  .chart-card {
+    background: #161b22;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .chart-card h2 {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  /* ── Empty state ────────────────────────────────────────────── */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+  .empty-state-glyph {
+    font-family: var(--font-mono);
+    font-size: 3rem;
+    color: var(--border);
+    margin-bottom: 1rem;
+    line-height: 1;
+  }
+  .empty-state-title {
+    font-family: var(--font-ui);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+  .empty-state p {
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-  <h1>Portfolio Overview</h1>
 
-  <button
-    class="btn-add"
-    hx-get="/htmx/holdings/add-form"
-    hx-target="#add-form-slot"
-    hx-swap="innerHTML">+ Add Holding</button>
-  <a href="/import/pdf"><button class="btn-add" style="margin-left:0.5rem;">&#8593; Import PDF</button></a>
+  <!-- Hero stats bar -->
+  <div class="hero-bar">
+    <div class="hero-primary">
+      <span class="hero-label">Total Portfolio Value</span>
+      <span class="hero-value">
+        {% if total_value is not none %}
+          {{ "%.2f"|format(total_value) }}<span class="hero-currency">EUR</span>
+        {% else %}
+          <span style="color: var(--muted);">—</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="hero-kpi">
+      <span class="hero-kpi-label">Holdings</span>
+      <span class="hero-kpi-value">{{ holdings_count }}</span>
+    </div>
+    {% if last_refresh %}
+    <div class="hero-kpi">
+      <span class="hero-kpi-label">Last Refresh</span>
+      <span class="hero-kpi-value">{{ last_refresh }}</span>
+    </div>
+    {% endif %}
+  </div>
 
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button
+      class="btn-primary"
+      hx-get="/htmx/holdings/add-form"
+      hx-target="#add-form-slot"
+      hx-swap="innerHTML"
+      hx-on::after-swap="document.getElementById('add-form-slot').classList.add('open')">
+      + Add Holding
+    </button>
+    <a href="/import/pdf"><button class="btn-ghost">&#8593; Import PDF</button></a>
+  </div>
+
+  <!-- Add form slot (slide-down) -->
   <div id="add-form-slot"></div>
 
+  <!-- Charts (only when there is data) -->
   {% if total_value is not none %}
-  <div class="chart-section">
-    <h2>Portfolio Performance (1Y)</h2>
+  <div class="chart-card">
+    <h2>Performance</h2>
     <div id="performance-chart" style="height: 300px;"></div>
   </div>
-  <script>
-    (async () => {
-      const resp = await fetch('/api/v1/holdings/chart/performance');
-      const fig = await resp.json();
-      if (fig && fig.data) {
-        Plotly.newPlot('performance-chart', fig.data, fig.layout, {
-          responsive: true,
-          displayModeBar: false,
-        });
-      }
-    })();
-  </script>
 
-  <div class="chart-section">
-    <h2>Portfolio Allocation</h2>
+  <div class="chart-card">
+    <h2>Allocation</h2>
     <div id="allocation-chart" style="height: 350px;"></div>
   </div>
-  <script>
-    (async () => {
-      const resp = await fetch('/api/v1/holdings/chart/allocation');
-      const fig = await resp.json();
-      if (fig && fig.data) {
-        Plotly.newPlot('allocation-chart', fig.data, fig.layout, {
-          responsive: true,
-          displayModeBar: false,
-        });
-      }
-    })();
-  </script>
   {% endif %}
 
+  <!-- Holdings table -->
   {% if holdings %}
-  <table>
+  <table class="holdings-table">
     <thead>
       <tr>
         <th>Stock</th>
@@ -67,7 +265,12 @@
     <tbody id="holdings-tbody">
       {% for row in holdings %}
       <tr id="holding-row-{{ row.id }}">
-        <td><a href="/stocks/{{ row.ticker }}">{{ row.name }} ({{ row.ticker }})</a></td>
+        <td>
+          <a href="/stocks/{{ row.ticker }}" style="text-decoration: none;">
+            <span class="holding-ticker">{{ row.ticker }}</span>
+            <span class="holding-name">{{ row.name }}</span>
+          </a>
+        </td>
         <td class="number">{{ row.quantity }}</td>
         <td class="number">
           {% if row.current_value is not none %}
@@ -94,7 +297,7 @@
     </tbody>
     <tfoot>
       <tr class="total-row">
-        <td colspan="3">Total Portfolio Value</td>
+        <td colspan="2">Total Portfolio Value</td>
         <td class="number">
           {% if total_value is not none %}
             {{ "%.2f"|format(total_value) }} &euro;
@@ -102,11 +305,14 @@
             <span class="na">N/A</span>
           {% endif %}
         </td>
+        <td></td>
       </tr>
     </tfoot>
   </table>
+
   {% else %}
-  <table>
+  <!-- Empty state -->
+  <table class="holdings-table">
     <thead>
       <tr>
         <th>Stock</th>
@@ -117,6 +323,67 @@
     </thead>
     <tbody id="holdings-tbody"></tbody>
   </table>
-  <p>No holdings yet. Use the button above to add your first holding.</p>
+  <div class="empty-state">
+    <div class="empty-state-glyph">[ ]</div>
+    <div class="empty-state-title">No holdings yet</div>
+    <p>Your portfolio is empty. Add your first holding to get started.</p>
+    <button
+      class="btn-primary"
+      hx-get="/htmx/holdings/add-form"
+      hx-target="#add-form-slot"
+      hx-swap="innerHTML"
+      hx-on::after-swap="document.getElementById('add-form-slot').classList.add('open'); this.closest('.empty-state').style.display='none'">
+      + Add First Holding
+    </button>
+  </div>
   {% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+{% if total_value is not none %}
+<script>
+  const DARK_LAYOUT = {
+    paper_bgcolor: '#0d1117',
+    plot_bgcolor: '#161b22',
+    font: { color: '#e6edf3', family: "'JetBrains Mono', monospace" },
+    xaxis: { gridcolor: '#30363d', zerolinecolor: '#30363d' },
+    yaxis: { gridcolor: '#30363d', zerolinecolor: '#30363d' },
+    legend: { bgcolor: 'transparent', font: { color: '#8b949e' } },
+  };
+
+  (async () => {
+    const resp = await fetch('/api/v1/holdings/chart/performance');
+    const fig = await resp.json();
+    if (fig && fig.data) {
+      const layout = Object.assign({}, fig.layout, DARK_LAYOUT, {
+        xaxis: Object.assign({}, (fig.layout || {}).xaxis, DARK_LAYOUT.xaxis),
+        yaxis: Object.assign({}, (fig.layout || {}).yaxis, DARK_LAYOUT.yaxis),
+      });
+      if (fig.data[0]) {
+        fig.data[0].line = Object.assign({}, fig.data[0].line, { color: '#22d3a0' });
+      }
+      Plotly.newPlot('performance-chart', fig.data, layout, {
+        responsive: true,
+        displayModeBar: false,
+      });
+    }
+  })();
+
+  (async () => {
+    const resp = await fetch('/api/v1/holdings/chart/allocation');
+    const fig = await resp.json();
+    if (fig && fig.data) {
+      const layout = Object.assign({}, fig.layout, DARK_LAYOUT, {
+        xaxis: Object.assign({}, (fig.layout || {}).xaxis, DARK_LAYOUT.xaxis),
+        yaxis: Object.assign({}, (fig.layout || {}).yaxis, DARK_LAYOUT.yaxis),
+      });
+      Plotly.newPlot('allocation-chart', fig.data, layout, {
+        responsive: true,
+        displayModeBar: false,
+      });
+    }
+  })();
+</script>
+{% endif %}
 {% endblock %}
