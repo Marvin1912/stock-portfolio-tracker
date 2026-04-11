@@ -68,6 +68,7 @@ class PortfolioService:
 
         tickers = [h.stock.ticker for h in holdings]
         qty_by_ticker = {h.stock.ticker: h.quantity for h in holdings}
+        currency_by_ticker = {h.stock.ticker: h.stock.currency for h in holdings}
 
         one_year_ago = datetime.date.today() - datetime.timedelta(days=365)
         price_rows = await db.execute(
@@ -83,10 +84,19 @@ class PortfolioService:
         for ticker, date, close_price in price_rows:
             prices_by_date.setdefault(date, {})[ticker] = close_price
 
+        all_tickers = set(tickers)
         performance: list[tuple[datetime.date, Decimal]] = []
         for date in sorted(prices_by_date):
             day_prices = prices_by_date[date]
-            total = sum((qty_by_ticker[t] * p for t, p in day_prices.items()), Decimal("0"))
+            # Skip dates where not all holdings have price data to avoid
+            # artificially low totals from partial coverage.
+            if day_prices.keys() < all_tickers:
+                continue
+            total = sum(
+                (qty_by_ticker[t] * to_eur(p, currency_by_ticker[t])
+                 for t, p in day_prices.items()),
+                Decimal("0"),
+            )
             performance.append((date, total))
 
         return performance
