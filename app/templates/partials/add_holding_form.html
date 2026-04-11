@@ -20,7 +20,7 @@
           autocomplete="off"
           oninput="toggleWknTicker(this, 'wkn', 'ticker-hint', 'wkn-hint')"
           hx-get="/htmx/validate-ticker"
-          hx-trigger="blur, input changed delay:600ms"
+          hx-trigger="input changed delay:600ms"
           hx-include="[name='ticker']"
           hx-target="#ticker-hint"
           hx-swap="innerHTML">
@@ -42,7 +42,7 @@
           autocomplete="off"
           oninput="toggleWknTicker(this, 'ticker', 'wkn-hint', 'ticker-hint')"
           hx-get="/htmx/validate-wkn"
-          hx-trigger="blur, input changed delay:600ms"
+          hx-trigger="input changed delay:600ms"
           hx-include="[name='wkn']"
           hx-target="#wkn-hint"
           hx-swap="innerHTML">
