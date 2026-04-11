@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from pydantic import ValidationError  # noqa: I001
 
 from app.schemas.holdings import HoldingCreate
-
 
 # ---------------------------------------------------------------------------
 # Schema-level WKN validation
