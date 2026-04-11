@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -9,12 +10,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_async_session
 from app.models.holding import Holding
+from app.models.price_cache import PriceCache
 from app.services.fx_service import to_eur
 
 router = APIRouter(tags=["portfolio-ui"])
@@ -64,11 +66,18 @@ async def portfolio_overview(
             )
         )
 
+    last_refresh_result = await db.execute(
+        select(func.max(PriceCache.date))
+    )
+    last_refresh: datetime.date | None = last_refresh_result.scalar()
+
     return templates.TemplateResponse(
         request=request,
         name="portfolio.html",
         context={
             "holdings": holding_rows,
             "total_value": total_value,
+            "holdings_count": len(holding_rows),
+            "last_refresh": last_refresh,
         },
     )
