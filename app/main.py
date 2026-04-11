@@ -7,75 +7,46 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import uvicorn
-from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
 from app.database import build_engine, build_session_factory, close_db, init_db
-from app.routers import health, holdings, htmx, import_pdf, portfolio, stocks
+from app.routers import admin, health, holdings, htmx, import_pdf, portfolio, stocks
 
 __all__ = ["app", "create_app"]
 
 logger = logging.getLogger(__name__)
 
 
-async def _refresh_price_cache_job(session_factory: object) -> None:
-    """Scheduled job: refresh price cache for all tracked tickers."""
-    from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    from app.models.stock import Stock
-    from app.services.price_service import refresh_price_cache
-
-    factory: async_sessionmaker[AsyncSession] = session_factory  # type: ignore[assignment]
-    async with factory() as db:
-        tickers_result = await db.execute(select(Stock.ticker))
-        tickers = list(tickers_result.scalars().all())
-
-    if not tickers:
-        logger.info("No tickers to refresh.")
-        return
-
-    factory2: async_sessionmaker[AsyncSession] = session_factory  # type: ignore[assignment]
-    async with factory2() as db:
-        await refresh_price_cache(tickers, db)
-
-
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     """Manage startup and shutdown of shared resources.
 
-    Startup: initialise the database engine and price-cache scheduler.
-    Shutdown: dispose all database connections.
+    Startup: initialise the database engine and APScheduler.
+    Shutdown: stop the scheduler and dispose all database connections.
     """
+    import asyncio
+
+    from app.scheduler import create_scheduler, run_price_cache_refresh
+
     settings: Settings = application.state.settings
     logger.info("Starting up — env=%s", settings.app_env)
 
     init_db(settings)
     logger.info("Database engine initialised.")
 
-    # Build a dedicated session factory for the scheduler so it is
+    # Build a dedicated engine/session factory for the scheduler so it is
     # independent of the per-request factory.
     _sched_engine = build_engine(settings)
     _sched_factory = build_session_factory(_sched_engine)
 
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(
-        _refresh_price_cache_job,
-        trigger="cron",
-        hour=6,
-        minute=0,
-        args=[_sched_factory],
-        id="refresh_price_cache",
-        replace_existing=True,
-    )
+    scheduler = create_scheduler(settings, _sched_factory)
     scheduler.start()
-    logger.info("Price-cache scheduler started (daily at 06:00).")
+    logger.info("Scheduler started (price cache: daily 07:00, monthly report: 1st 08:00).")
 
     # Run an initial cache warm-up in the background so it doesn't block startup.
-    import asyncio
-    asyncio.create_task(_refresh_price_cache_job(_sched_factory))
+    asyncio.create_task(run_price_cache_refresh(_sched_factory))
 
     yield
 
@@ -133,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(holdings.router, prefix="/api/v1")
     app.include_router(htmx.router)
     app.include_router(import_pdf.router)
+    app.include_router(admin.router)
     # Future routers (uncomment as implemented):
     # app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["auth"])
     # app.include_router(portfolios.router, prefix="/api/v1/portfolios", tags=["portfolios"])
