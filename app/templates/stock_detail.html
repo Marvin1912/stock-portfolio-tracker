@@ -1,70 +1,255 @@
 {% extends "base.html" %}
 
-{% block title %}{{ stock.name }} ({{ stock.ticker }}){% endblock %}
+{% block title %}{{ stock.ticker }} — Terminal Ledger{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  /* ── Back nav ────────────────────────────────────────────────── */
+  .back-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.65rem;
+    margin-bottom: 2rem;
+    text-decoration: none;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .back-nav:hover {
+    color: var(--text);
+    border-color: var(--muted);
+    text-decoration: none;
+    opacity: 1;
+  }
+
+  /* ── Instrument header ───────────────────────────────────────── */
+  .instrument-header {
+    margin-bottom: 2rem;
+  }
+  .instrument-ticker {
+    font-family: var(--font-mono);
+    font-size: 2.8rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+  .instrument-name {
+    font-family: var(--font-ui);
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .instrument-sep {
+    height: 1px;
+    background: linear-gradient(to right, var(--accent), transparent);
+    border: none;
+    margin: 0;
+    opacity: 0.5;
+  }
+
+  /* ── Stats strip ─────────────────────────────────────────────── */
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .stat-value {
+    font-family: var(--font-mono);
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+  .stat-value.na {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  /* ── Chart card ──────────────────────────────────────────────── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .chart-card-title {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  /* ── No-data state ───────────────────────────────────────────── */
+  .no-data-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 3rem 2rem;
+    color: var(--muted);
+  }
+  .no-data-icon {
+    opacity: 0.3;
+  }
+  .no-data-text {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--muted);
+  }
+
+  @media (max-width: 600px) {
+    .stats-strip { grid-template-columns: 1fr; }
+    .instrument-ticker { font-size: 2rem; }
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-  <p><a href="/">&larr; Back to Portfolio</a></p>
 
-  <h1>{{ stock.name }}</h1>
-  <p class="subtitle">{{ stock.ticker }}</p>
+  <!-- Back navigation -->
+  <a href="/" class="back-nav">&larr; Portfolio</a>
 
-  <div class="summary-card">
-    <h2>Current Holding</h2>
-    <div class="summary-grid">
-      <div class="summary-item">
-        <span class="summary-label">Quantity</span>
-        <span class="summary-value">
-          {% if stock.quantity is not none %}
-            {{ stock.quantity }}
-          {% else %}
-            <span class="na">Not held</span>
-          {% endif %}
-        </span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Current Price</span>
-        <span class="summary-value">
-          {% if stock.current_price is not none %}
-            {{ "%.2f"|format(stock.current_price) }} &euro;
-          {% else %}
-            <span class="na">N/A</span>
-          {% endif %}
-        </span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Current Value</span>
-        <span class="summary-value">
-          {% if stock.current_value is not none %}
-            {{ "%.2f"|format(stock.current_value) }} &euro;
-          {% else %}
-            <span class="na">N/A</span>
-          {% endif %}
-        </span>
-      </div>
+  <!-- Instrument header -->
+  <div class="instrument-header">
+    <div class="instrument-ticker">{{ stock.ticker }}</div>
+    <div class="instrument-name">{{ stock.name }}</div>
+    <hr class="instrument-sep">
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stats-strip">
+    <div class="stat-card">
+      <span class="stat-label">Quantity</span>
+      <span class="stat-value{% if stock.quantity is none %} na{% endif %}">
+        {% if stock.quantity is not none %}
+          {{ stock.quantity }}
+        {% else %}
+          —
+        {% endif %}
+      </span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Current Price</span>
+      <span class="stat-value{% if stock.current_price is none %} na{% endif %}">
+        {% if stock.current_price is not none %}
+          {{ "%.2f"|format(stock.current_price) }} <small style="font-size:0.75em;color:var(--muted);">EUR</small>
+        {% else %}
+          —
+        {% endif %}
+      </span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Current Value</span>
+      <span class="stat-value{% if stock.current_value is none %} na{% endif %}">
+        {% if stock.current_value is not none %}
+          {{ "%.2f"|format(stock.current_value) }} <small style="font-size:0.75em;color:var(--muted);">EUR</small>
+        {% else %}
+          —
+        {% endif %}
+      </span>
     </div>
   </div>
 
-  <div class="chart-section">
-    <h2>Price History (1Y)</h2>
+  <!-- Price history chart -->
+  <div class="chart-card">
+    <div class="chart-card-title">Price History &middot; 1Y</div>
     <div id="price-history-chart" style="height: 300px;"></div>
   </div>
-  <script>
-    (async () => {
-      const resp = await fetch('/api/v1/stocks/{{ stock.ticker }}/chart/price-history');
-      const fig = await resp.json();
-      if (fig && fig.data) {
-        Plotly.newPlot('price-history-chart', fig.data, fig.layout, {
-          responsive: true,
-          displayModeBar: false,
-        });
-      } else {
-        document.getElementById('price-history-chart').innerHTML =
-          '<p class="no-data">No price history available yet. Data is refreshed daily.</p>';
-      }
-    })();
-  </script>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (async () => {
+    const resp = await fetch('/api/v1/stocks/{{ stock.ticker }}/chart/price-history');
+    const fig = await resp.json();
+
+    const container = document.getElementById('price-history-chart');
+
+    if (fig && fig.data && fig.data.length) {
+      // Apply dark theme and green line with fill
+      const trace = Object.assign({}, fig.data[0], {
+        line: { color: '#22d3a0', width: 2 },
+        fill: 'tozeroy',
+        fillcolor: 'rgba(34, 211, 160, 0.07)',
+        mode: 'lines',
+      });
+
+      const layout = {
+        paper_bgcolor: '#161b22',
+        plot_bgcolor: '#161b22',
+        margin: { t: 10, b: 40, l: 60, r: 10 },
+        font: { color: '#8b949e', family: "'JetBrains Mono', monospace", size: 11 },
+        xaxis: {
+          showgrid: false,
+          zeroline: false,
+          tickcolor: '#30363d',
+          linecolor: '#30363d',
+          tickfont: { color: '#8b949e' },
+        },
+        yaxis: {
+          showgrid: true,
+          gridcolor: '#30363d',
+          zeroline: false,
+          tickformat: ',.2f',
+          tickfont: { color: '#8b949e' },
+        },
+        hovermode: 'x unified',
+        hoverlabel: {
+          bgcolor: '#0d1117',
+          bordercolor: '#30363d',
+          font: { color: '#e6edf3', family: "'JetBrains Mono', monospace" },
+        },
+      };
+
+      Plotly.newPlot(container, [trace], layout, {
+        responsive: true,
+        displayModeBar: false,
+      });
+    } else {
+      container.innerHTML = `
+        <div class="no-data-state">
+          <svg class="no-data-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="32" width="8" height="12" rx="1" fill="#8b949e"/>
+            <rect x="16" y="22" width="8" height="22" rx="1" fill="#8b949e"/>
+            <rect x="28" y="14" width="8" height="30" rx="1" fill="#8b949e"/>
+            <rect x="40" y="8" width="4" height="36" rx="1" fill="#8b949e"/>
+            <line x1="4" y1="36" x2="44" y2="36" stroke="#30363d" stroke-width="1"/>
+          </svg>
+          <span class="no-data-text">// no price history available &mdash; data is refreshed daily</span>
+        </div>`;
+    }
+  })();
+</script>
 {% endblock %}
