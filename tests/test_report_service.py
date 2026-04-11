@@ -15,11 +15,13 @@ from app.services.report_service import MonthlyReportData, ReportService, StockR
 # ---------------------------------------------------------------------------
 
 def _make_holding(
+    wkn: str,
     ticker: str,
     name: str,
     quantity: str,
 ) -> MagicMock:
     stock = MagicMock()
+    stock.wkn = wkn
     stock.ticker = ticker
     stock.name = name
 
@@ -68,7 +70,7 @@ async def test_no_holdings_returns_none() -> None:
 
 @pytest.mark.asyncio
 async def test_single_holding_full_data() -> None:
-    holdings = [_make_holding("AAPL", "Apple Inc.", "10")]
+    holdings = [_make_holding("AAPL01", "AAPL", "Apple Inc.", "10")]
     price_rows = [
         ("AAPL", _MAR_1, Decimal("150.0000")),
         ("AAPL", _MAR_31, Decimal("160.0000")),
@@ -84,7 +86,7 @@ async def test_single_holding_full_data() -> None:
 
     assert len(report.lines) == 1
     line = report.lines[0]
-    assert line.ticker == "AAPL"
+    assert line.wkn == "AAPL01"
     assert line.price_1st == Decimal("150.0000")
     assert line.price_last == Decimal("160.0000")
     assert line.value_1st == Decimal("1500.0000")
@@ -100,7 +102,7 @@ async def test_single_holding_full_data() -> None:
 
 @pytest.mark.asyncio
 async def test_negative_delta() -> None:
-    holdings = [_make_holding("TSLA", "Tesla Inc.", "5")]
+    holdings = [_make_holding("TSLA01", "TSLA", "Tesla Inc.", "5")]
     price_rows = [
         ("TSLA", _MAR_1, Decimal("200.0000")),
         ("TSLA", _MAR_31, Decimal("180.0000")),
@@ -118,7 +120,7 @@ async def test_negative_delta() -> None:
 
 @pytest.mark.asyncio
 async def test_holding_without_cached_prices() -> None:
-    holdings = [_make_holding("UNKN", "Unknown Corp.", "3")]
+    holdings = [_make_holding("UNKN01", "UNKN", "Unknown Corp.", "3")]
     db = _make_db(holdings, [])  # no price rows
 
     report = await ReportService().generate_monthly_report(db, reference_date=_REF)
@@ -140,8 +142,8 @@ async def test_holding_without_cached_prices() -> None:
 async def test_multiple_holdings_mixed_prices() -> None:
     """Holdings with and without cached prices; total excludes missing prices."""
     holdings = [
-        _make_holding("AAPL", "Apple Inc.", "10"),
-        _make_holding("UNKN", "Unknown Corp.", "5"),
+        _make_holding("AAPL01", "AAPL", "Apple Inc.", "10"),
+        _make_holding("UNKN01", "UNKN", "Unknown Corp.", "5"),
     ]
     price_rows = [
         ("AAPL", _MAR_1, Decimal("100.0000")),
@@ -154,8 +156,8 @@ async def test_multiple_holdings_mixed_prices() -> None:
     assert report is not None
     assert len(report.lines) == 2
 
-    aapl = next(line for line in report.lines if line.ticker == "AAPL")
-    unkn = next(line for line in report.lines if line.ticker == "UNKN")
+    aapl = next(line for line in report.lines if line.wkn == "AAPL01")
+    unkn = next(line for line in report.lines if line.wkn == "UNKN01")
 
     assert aapl.delta_eur == Decimal("100.0000")
     assert unkn.delta_eur is None
@@ -169,7 +171,7 @@ async def test_multiple_holdings_mixed_prices() -> None:
 @pytest.mark.asyncio
 async def test_uses_first_and_last_available_trading_day() -> None:
     """When prices don't start on the 1st, use the earliest/latest available."""
-    holdings = [_make_holding("MSFT", "Microsoft Corp.", "2")]
+    holdings = [_make_holding("MSFT01", "MSFT", "Microsoft Corp.", "2")]
     mar_3 = datetime.date(2026, 3, 3)
     mar_28 = datetime.date(2026, 3, 28)
     price_rows = [
@@ -193,7 +195,7 @@ async def test_uses_first_and_last_available_trading_day() -> None:
 def _make_report_data() -> MonthlyReportData:
     lines = [
         StockReportLine(
-            ticker="AAPL",
+            wkn="AAPL01",
             name="Apple Inc.",
             quantity=Decimal("10"),
             price_1st=Decimal("150.00"),
@@ -204,7 +206,7 @@ def _make_report_data() -> MonthlyReportData:
             delta_pct=Decimal("6.67"),
         ),
         StockReportLine(
-            ticker="TSLA",
+            wkn="TSLA01",
             name="Tesla Inc.",
             quantity=Decimal("5"),
             price_1st=None,
@@ -232,27 +234,27 @@ def test_render_html_contains_key_data() -> None:
     html = ReportService().render_html(data)
 
     assert "March 2026" in html
-    assert "AAPL" in html
+    assert "AAPL01" in html
     assert "Apple Inc." in html
     assert "1500.00" in html
     assert "1600.00" in html
     assert "+€100.00" in html
     assert "+6.67%" in html
-    assert "TSLA" in html
+    assert "TSLA01" in html
 
 
 def test_render_html_shows_dash_for_missing_prices() -> None:
     data = _make_report_data()
     html = ReportService().render_html(data)
 
-    # TSLA has no prices — dashes should appear
+    # TSLA01 has no prices — dashes should appear
     assert "—" in html
 
 
 def test_render_html_negative_delta_no_plus_sign() -> None:
     lines = [
         StockReportLine(
-            ticker="TSLA",
+            wkn="TSLA01",
             name="Tesla Inc.",
             quantity=Decimal("5"),
             price_1st=Decimal("200.00"),

@@ -30,7 +30,7 @@ _DB = Depends(get_async_session)
 
 @dataclass
 class StockDetail:
-    ticker: str
+    wkn: str
     name: str
     currency: str
     current_price: Decimal | None
@@ -38,25 +38,25 @@ class StockDetail:
     current_value: Decimal | None
 
 
-async def _get_stock_or_404(ticker: str, db: AsyncSession) -> Stock:
-    result = await db.execute(select(Stock).where(Stock.ticker == ticker.upper()))
+async def _get_stock_or_404(wkn: str, db: AsyncSession) -> Stock:
+    result = await db.execute(select(Stock).where(Stock.wkn == wkn.upper()))
     stock = result.scalar_one_or_none()
     if stock is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock '{ticker}' not found",
+            detail=f"Stock '{wkn}' not found",
         )
     return stock
 
 
-@router.get("/stocks/{ticker}", response_class=HTMLResponse)
+@router.get("/stocks/{wkn}", response_class=HTMLResponse)
 async def stock_detail(
-    ticker: str,
+    wkn: str,
     request: Request,
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
-    """Render the stock detail page for the given ticker."""
-    stock = await _get_stock_or_404(ticker, db)
+    """Render the stock detail page for the given WKN."""
+    stock = await _get_stock_or_404(wkn, db)
 
     holding_result = await db.execute(select(Holding).where(Holding.stock_id == stock.id))
     holding = holding_result.scalar_one_or_none()
@@ -69,7 +69,7 @@ async def stock_detail(
             current_value = quantity * stock.current_price
 
     detail = StockDetail(
-        ticker=stock.ticker,
+        wkn=stock.wkn,
         name=stock.name,
         currency=stock.currency,
         current_price=stock.current_price,
@@ -84,19 +84,19 @@ async def stock_detail(
     )
 
 
-@router.get("/api/v1/stocks/{ticker}/chart/price-history")
+@router.get("/api/v1/stocks/{wkn}/chart/price-history")
 async def get_price_history_chart(
-    ticker: str,
+    wkn: str,
     db: AsyncSession = _DB,
 ) -> JSONResponse:
     """Return a Plotly line chart of the stock's 1Y price history as JSON."""
-    await _get_stock_or_404(ticker, db)
+    stock = await _get_stock_or_404(wkn, db)
 
     one_year_ago = datetime.date.today() - datetime.timedelta(days=365)
     price_rows = await db.execute(
         select(PriceCache.date, PriceCache.close_price)
         .where(
-            PriceCache.ticker == ticker.upper(),
+            PriceCache.ticker == stock.ticker,
             PriceCache.date >= one_year_ago,
         )
         .order_by(PriceCache.date)

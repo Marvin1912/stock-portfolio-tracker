@@ -38,7 +38,7 @@ class PortfolioService:
             items.append(
                 HoldingSummaryItem(
                     id=h.id,
-                    ticker=h.stock.ticker,
+                    wkn=h.stock.wkn,
                     name=h.stock.name,
                     quantity=h.quantity,
                     current_price=h.stock.current_price,

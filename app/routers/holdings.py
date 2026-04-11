@@ -73,7 +73,7 @@ async def get_allocation_chart(
 
     fig = go.Figure(
         go.Pie(
-            labels=[h.ticker for h in valued],
+            labels=[h.wkn for h in valued],
             values=[float(h.current_value) for h in valued],  # type: ignore[arg-type]
             hole=0.5,
             customdata=[h.name for h in valued],
@@ -109,7 +109,7 @@ async def list_holdings(
     return [
         HoldingResponse(
             id=h.id,
-            ticker=h.stock.ticker,
+            wkn=h.stock.wkn,
             name=h.stock.name,
             quantity=h.quantity,
         )
@@ -122,18 +122,18 @@ async def create_holding(
     payload: HoldingCreate,
     db: AsyncSession = _DB,
 ) -> HoldingResponse:
-    """Add a new holding by ticker and quantity.
+    """Add a new holding by WKN and quantity.
 
-    If the ticker does not exist a 404 is returned.
+    If the WKN does not exist a 404 is returned.
     """
     result = await db.execute(
-        select(Stock).where(Stock.ticker == payload.ticker.upper())
+        select(Stock).where(Stock.wkn == payload.wkn)
     )
     stock = result.scalar_one_or_none()
     if stock is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock with ticker '{payload.ticker}' not found",
+            detail=f"Stock with WKN '{payload.wkn}' not found",
         )
 
     holding = Holding(stock_id=stock.id, quantity=payload.quantity)
@@ -143,7 +143,7 @@ async def create_holding(
 
     return HoldingResponse(
         id=holding.id,
-        ticker=stock.ticker,
+        wkn=stock.wkn,
         name=stock.name,
         quantity=holding.quantity,
     )
@@ -163,7 +163,7 @@ async def update_holding(
 
     return HoldingResponse(
         id=holding.id,
-        ticker=holding.stock.ticker,
+        wkn=holding.stock.wkn,
         name=holding.stock.name,
         quantity=holding.quantity,
     )

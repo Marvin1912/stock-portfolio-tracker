@@ -1,5 +1,5 @@
 <tr id="holding-row-{{ holding.id }}">
-  <td><a href="/stocks/{{ holding.ticker }}">{{ holding.name }} ({{ holding.ticker }})</a></td>
+  <td><a href="/stocks/{{ holding.wkn }}">{{ holding.name }} ({{ holding.wkn }})</a></td>
   <td class="number">{{ holding.quantity }}</td>
   <td class="number">
     {% if holding.current_value is not none %}
@@ -18,7 +18,7 @@
       hx-delete="/htmx/holdings/{{ holding.id }}"
       hx-target="#holding-row-{{ holding.id }}"
       hx-swap="outerHTML"
-      hx-confirm="Remove {{ holding.ticker }} from your portfolio?"
+      hx-confirm="Remove {{ holding.wkn }} from your portfolio?"
       class="btn-delete">Delete</button>
   </td>
 </tr>

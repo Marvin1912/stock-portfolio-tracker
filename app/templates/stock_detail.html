@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ stock.name }} ({{ stock.ticker }})</title>
+  <title>{{ stock.name }} ({{ stock.wkn }})</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
@@ -31,7 +31,7 @@
   <p><a href="/">&larr; Back to Portfolio</a></p>
 
   <h1>{{ stock.name }}</h1>
-  <p class="subtitle">{{ stock.ticker }} &middot; {{ stock.currency }}</p>
+  <p class="subtitle">{{ stock.wkn }} &middot; {{ stock.currency }}</p>
 
   <div class="summary-card">
     <h2>Current Holding</h2>
@@ -75,7 +75,7 @@
   </div>
   <script>
     (async () => {
-      const resp = await fetch('/api/v1/stocks/{{ stock.ticker }}/chart/price-history');
+      const resp = await fetch('/api/v1/stocks/{{ stock.wkn }}/chart/price-history');
       const fig = await resp.json();
       if (fig && fig.data) {
         Plotly.newPlot('price-history-chart', fig.data, fig.layout, {
