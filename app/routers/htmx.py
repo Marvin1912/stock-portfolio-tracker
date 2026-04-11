@@ -11,9 +11,11 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_async_session
 from app.models.holding import Holding
 from app.models.stock import Stock
+from app.services.openfigi_lookup import resolve_wkn
 from app.services.stock_lookup import fetch_stock_info
 
 router = APIRouter(prefix="/htmx", tags=["htmx"])
@@ -60,6 +62,33 @@ async def validate_ticker(
 
 
 # ---------------------------------------------------------------------------
+# WKN validation (inline, triggered on input)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/validate-wkn", response_class=HTMLResponse)
+async def validate_wkn(
+    request: Request,
+    wkn: str = "",
+) -> HTMLResponse:
+    """Return an inline validation hint for the WKN field."""
+    wkn = wkn.strip().upper()
+    if not wkn:
+        return HTMLResponse("")
+
+    settings = get_settings()
+    ticker = await resolve_wkn(wkn, api_key=settings.openfigi_api_key)
+    if ticker is None:
+        return _render(request, "partials/ticker_hint.html", {"valid": False, "name": None})
+
+    info = await fetch_stock_info(ticker)
+    if info:
+        return _render(request, "partials/ticker_hint.html", {"valid": True, "name": info.name})
+
+    return _render(request, "partials/ticker_hint.html", {"valid": False, "name": None})
+
+
+# ---------------------------------------------------------------------------
 # Add holding form & submission
 # ---------------------------------------------------------------------------
 
@@ -72,11 +101,40 @@ async def add_holding_form(request: Request) -> HTMLResponse:
 @router.post("/holdings", response_class=HTMLResponse)
 async def htmx_create_holding(
     request: Request,
-    ticker: str = Form(...),
+    ticker: str = Form(""),
+    wkn: str = Form(""),
     quantity: str = Form(...),
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     ticker = ticker.strip().upper()
+    wkn = wkn.strip().upper()
+
+    # Validate mutual exclusion
+    if ticker and wkn:
+        return _render(
+            request,
+            "partials/add_holding_form.html",
+            {"error": "Please provide either a Ticker or a WKN, not both.", "quantity": quantity},
+        )
+    if not ticker and not wkn:
+        return _render(
+            request,
+            "partials/add_holding_form.html",
+            {"error": "Please provide a Ticker or a WKN.", "quantity": quantity},
+        )
+
+    # Resolve WKN → ticker when WKN is provided
+    if wkn:
+        settings = get_settings()
+        resolved = await resolve_wkn(wkn, api_key=settings.openfigi_api_key)
+        if resolved is None:
+            return _render(
+                request,
+                "partials/add_holding_form.html",
+                {"error": f"WKN '{wkn}' could not be resolved.", "wkn": wkn, "quantity": quantity},
+            )
+        ticker = resolved
+
     try:
         qty = Decimal(quantity)
         if qty <= 0:
@@ -87,7 +145,8 @@ async def htmx_create_holding(
             "partials/add_holding_form.html",
             {
                 "error": "Quantity must be a positive number.",
-                "ticker": ticker,
+                "ticker": ticker if not wkn else "",
+                "wkn": wkn,
                 "quantity": quantity,
             },
         )

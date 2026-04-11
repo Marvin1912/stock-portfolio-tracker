@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     stock_api_base_url: str = "https://api.example-stock-provider.com/v1"
 
     # ------------------------------------------------------------------
+    # OpenFIGI  (issue #51 — WKN resolution)
+    # ------------------------------------------------------------------
+    openfigi_api_key: str = ""  # optional; unauthenticated: 25 req/min
+
+    # ------------------------------------------------------------------
     # PDF import  (issue #16, #17)
     # ------------------------------------------------------------------
     pdf_upload_dir: Path = Path("/tmp/portfolio_uploads")
