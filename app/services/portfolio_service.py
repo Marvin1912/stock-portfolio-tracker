@@ -93,7 +93,8 @@ class PortfolioService:
             if day_prices.keys() < all_tickers:
                 continue
             total = sum(
-                (qty_by_ticker[t] * to_eur(p, currency_by_ticker[t]) for t, p in day_prices.items()),
+                (qty_by_ticker[t] * to_eur(p, currency_by_ticker[t])
+                 for t, p in day_prices.items()),
                 Decimal("0"),
             )
             performance.append((date, total))
