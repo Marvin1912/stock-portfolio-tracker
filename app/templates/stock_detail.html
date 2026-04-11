@@ -1,33 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ stock.name }} ({{ stock.ticker }})</title>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <style>
-    body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { margin-bottom: 0.25rem; }
-    .subtitle { color: #555; margin-bottom: 2rem; }
-    a { color: #0066cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+{% extends "base.html" %}
 
-    /* Summary card */
-    .summary-card { border: 1px solid #ddd; border-radius: 6px; padding: 1.2rem 1.5rem; margin-bottom: 2rem; background: #fafafa; }
-    .summary-card h2 { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; }
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
-    .summary-item { display: flex; flex-direction: column; }
-    .summary-label { font-size: 0.8rem; color: #777; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; }
-    .summary-value { font-size: 1.1rem; font-weight: 600; }
-    .na { color: #999; font-weight: normal; }
+{% block title %}{{ stock.name }} ({{ stock.ticker }}){% endblock %}
 
-    /* Chart */
-    .chart-section { margin-bottom: 2rem; }
-    .chart-section h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
-    .no-data { color: #777; font-style: italic; }
-  </style>
-</head>
-<body>
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+{% endblock %}
+
+{% block content %}
   <p><a href="/">&larr; Back to Portfolio</a></p>
 
   <h1>{{ stock.name }}</h1>
@@ -88,5 +67,4 @@
       }
     })();
   </script>
-</body>
-</html>
+{% endblock %}
