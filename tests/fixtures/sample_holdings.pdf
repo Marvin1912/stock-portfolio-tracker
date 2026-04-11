@@ -18,13 +18,13 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
-(Ticker          Quantity) Tj
+(WKN             Quantity) Tj
 0 -15 Td
-(AAPL            10.00000000) Tj
+(865985          10.00000000) Tj
 0 -15 Td
-(MSFT            5.50000000) Tj
+(870747          5.50000000) Tj
 0 -15 Td
-(GOOGL           2.75000000) Tj
+(A14Y6F          2.75000000) Tj
 ET
 endstream
 endobj

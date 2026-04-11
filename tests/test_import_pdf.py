@@ -59,20 +59,20 @@ async def test_import_pdf_post_valid_pdf_shows_preview(client: AsyncClient) -> N
     )
     assert response.status_code == 200
     assert "Preview extracted holdings" in response.text
-    assert "AAPL" in response.text
+    assert "865985" in response.text
     assert "Confirm Import" in response.text
 
 
 @pytest.mark.asyncio
-async def test_import_pdf_post_valid_pdf_shows_all_tickers(client: AsyncClient) -> None:
+async def test_import_pdf_post_valid_pdf_shows_all_wkns(client: AsyncClient) -> None:
     pdf_bytes = FIXTURE_PDF.read_bytes()
     response = await client.post(
         "/import/pdf",
         files={"file": ("holdings.pdf", pdf_bytes, "application/pdf")},
     )
-    assert "AAPL" in response.text
-    assert "MSFT" in response.text
-    assert "GOOGL" in response.text
+    assert "865985" in response.text
+    assert "870747" in response.text
+    assert "A14Y6F" in response.text
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ async def test_import_pdf_confirm_calls_import_service(client: AsyncClient) -> N
         response = await client.post(
             "/import/pdf/confirm",
             data={
-                "tickers": ["AAPL", "MSFT"],
+                "wkns": ["AAPL", "MSFT"],
                 "quantities": ["10", "5.5"],
             },
         )
@@ -112,7 +112,7 @@ async def test_import_pdf_confirm_no_processed_shows_warning(client: AsyncClient
         response = await client.post(
             "/import/pdf/confirm",
             data={
-                "tickers": ["UNKNOWN"],
+                "wkns": ["UNKNOWN"],
                 "quantities": ["1"],
             },
         )
@@ -133,7 +133,7 @@ async def test_import_pdf_confirm_invalid_quantity_skipped(client: AsyncClient) 
         response = await client.post(
             "/import/pdf/confirm",
             data={
-                "tickers": ["AAPL", "MSFT"],
+                "wkns": ["AAPL", "MSFT"],
                 "quantities": ["5", "not-a-number"],
             },
         )
@@ -150,7 +150,7 @@ async def test_import_pdf_confirm_all_invalid_returns_error(client: AsyncClient)
     response = await client.post(
         "/import/pdf/confirm",
         data={
-            "tickers": ["AAPL"],
+            "wkns": ["AAPL"],
             "quantities": ["bad"],
         },
     )

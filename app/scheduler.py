@@ -22,19 +22,19 @@ logger = logging.getLogger(__name__)
 
 
 async def run_price_cache_refresh(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Fetch all tracked tickers and refresh the price cache."""
+    """Fetch all tracked WKNs and refresh the price cache."""
     async with session_factory() as db:
-        tickers_result = await db.execute(select(Stock.ticker))
-        tickers = list(tickers_result.scalars().all())
+        wkns_result = await db.execute(select(Stock.wkn))
+        wkns = list(wkns_result.scalars().all())
 
-    if not tickers:
-        logger.info("Price cache refresh: no tickers to refresh.")
+    if not wkns:
+        logger.info("Price cache refresh: no WKNs to refresh.")
         return
 
     async with session_factory() as db:
-        await refresh_price_cache(tickers, db)
+        await refresh_price_cache(wkns, db)
 
-    logger.info("Price cache refresh complete for %d ticker(s).", len(tickers))
+    logger.info("Price cache refresh complete for %d WKN(s).", len(wkns))
 
 
 async def run_monthly_report(session_factory: async_sessionmaker[AsyncSession]) -> None:

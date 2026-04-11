@@ -69,27 +69,27 @@
     <p class="note">
       Review the holdings below. Clicking <strong>Confirm Import</strong> will add
       these quantities to your existing holdings (or create new ones).
-      Tickers not yet tracked in the portfolio will be skipped.
+      WKNs not yet tracked in the portfolio will be skipped.
     </p>
     <table>
       <thead>
         <tr>
-          <th>Ticker</th>
+          <th>WKN</th>
           <th class="number">Quantity</th>
         </tr>
       </thead>
       <tbody>
-        {% for ticker, qty in pairs %}
+        {% for wkn, qty in pairs %}
         <tr>
-          <td>{{ ticker }}</td>
+          <td>{{ wkn }}</td>
           <td class="number">{{ qty }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     <form method="post" action="/import/pdf/confirm">
-      {% for ticker, qty in pairs %}
-      <input type="hidden" name="tickers" value="{{ ticker }}">
+      {% for wkn, qty in pairs %}
+      <input type="hidden" name="wkns" value="{{ wkn }}">
       <input type="hidden" name="quantities" value="{{ qty }}">
       {% endfor %}
       <div class="actions">
@@ -110,21 +110,21 @@
     <table>
       <thead>
         <tr>
-          <th>Ticker</th>
+          <th>WKN</th>
           <th class="number">Quantity added</th>
         </tr>
       </thead>
       <tbody>
-        {% for ticker, qty in processed %}
+        {% for wkn, qty in processed %}
         <tr>
-          <td>{{ ticker }}</td>
+          <td>{{ wkn }}</td>
           <td class="number">{{ qty }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    <div class="error">No holdings were imported. Make sure the tickers exist in your portfolio.</div>
+    <div class="error">No holdings were imported. Make sure the WKNs exist in your portfolio.</div>
     {% endif %}
     <div class="actions">
       <a href="/"><button type="button" class="btn-primary">Back to portfolio</button></a>

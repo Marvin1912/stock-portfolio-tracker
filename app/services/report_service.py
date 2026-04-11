@@ -73,37 +73,37 @@ class ReportService:
         if not holdings:
             return None
 
-        tickers = [h.stock.ticker for h in holdings]
+        wkns = [h.stock.wkn for h in holdings]
 
-        # Fetch all cached prices for those tickers within the previous month.
+        # Fetch all cached prices for those WKNs within the previous month.
         price_rows = await db.execute(
-            select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
+            select(PriceCache.wkn, PriceCache.date, PriceCache.close_price)
             .where(
-                PriceCache.ticker.in_(tickers),
+                PriceCache.wkn.in_(wkns),
                 PriceCache.date >= period_start,
                 PriceCache.date <= period_end,
             )
         )
 
-        # Build {ticker: {date: price}} mapping.
+        # Build {wkn: {date: price}} mapping.
         prices: dict[str, dict[datetime.date, Decimal]] = {}
-        for ticker, date, close_price in price_rows:
-            prices.setdefault(ticker, {})[date] = close_price
+        for wkn, date, close_price in price_rows:
+            prices.setdefault(wkn, {})[date] = close_price
 
         lines: list[StockReportLine] = []
         total_value_1st: Decimal | None = None
         total_value_last: Decimal | None = None
 
         for h in holdings:
-            ticker = h.stock.ticker
-            ticker_prices = prices.get(ticker, {})
+            wkn = h.stock.wkn
+            wkn_prices = prices.get(wkn, {})
 
             price_1st: Decimal | None = None
             price_last: Decimal | None = None
 
-            if ticker_prices:
-                price_1st = ticker_prices[min(ticker_prices)]
-                price_last = ticker_prices[max(ticker_prices)]
+            if wkn_prices:
+                price_1st = wkn_prices[min(wkn_prices)]
+                price_last = wkn_prices[max(wkn_prices)]
 
             value_1st = h.quantity * price_1st if price_1st is not None else None
             value_last = h.quantity * price_last if price_last is not None else None

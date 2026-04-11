@@ -63,27 +63,27 @@ class PortfolioService:
         if not holdings:
             return []
 
-        tickers = [h.stock.ticker for h in holdings]
-        qty_by_ticker = {h.stock.ticker: h.quantity for h in holdings}
+        wkns = [h.stock.wkn for h in holdings]
+        qty_by_wkn = {h.stock.wkn: h.quantity for h in holdings}
 
         one_year_ago = datetime.date.today() - datetime.timedelta(days=365)
         price_rows = await db.execute(
-            select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
+            select(PriceCache.wkn, PriceCache.date, PriceCache.close_price)
             .where(
-                PriceCache.ticker.in_(tickers),
+                PriceCache.wkn.in_(wkns),
                 PriceCache.date >= one_year_ago,
             )
             .order_by(PriceCache.date)
         )
 
         prices_by_date: dict[datetime.date, dict[str, Decimal]] = {}
-        for ticker, date, close_price in price_rows:
-            prices_by_date.setdefault(date, {})[ticker] = close_price
+        for wkn, date, close_price in price_rows:
+            prices_by_date.setdefault(date, {})[wkn] = close_price
 
         performance: list[tuple[datetime.date, Decimal]] = []
         for date in sorted(prices_by_date):
             day_prices = prices_by_date[date]
-            total = sum((qty_by_ticker[t] * p for t, p in day_prices.items()), Decimal("0"))
+            total = sum((qty_by_wkn[t] * p for t, p in day_prices.items()), Decimal("0"))
             performance.append((date, total))
 
         return performance

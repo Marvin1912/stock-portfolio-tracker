@@ -10,9 +10,9 @@ import pdfplumber
 
 from app.services.pdf_parser import BaseBrokerParser
 
-# Matches lines like "AAPL 10.00000000" – a single all-caps ticker followed by
-# a decimal (or integer) quantity.
-_ROW_RE = re.compile(r"^([A-Z]{1,10})\s+([\d]+(?:\.[\d]+)?)$")
+# Matches lines like "865985 10.00000000" – a 6-character alphanumeric WKN followed
+# by a decimal (or integer) quantity.
+_ROW_RE = re.compile(r"^([A-Z0-9]{6})\s+([\d]+(?:\.[\d]+)?)$")
 
 
 class GenericTableParser(BaseBrokerParser):
@@ -20,9 +20,9 @@ class GenericTableParser(BaseBrokerParser):
 
     Each data row must have the format::
 
-        <TICKER>   <QUANTITY>
+        <WKN>   <QUANTITY>
 
-    where *TICKER* is one-to-ten uppercase letters and *QUANTITY* is a decimal
+    where *WKN* is exactly six alphanumeric characters and *QUANTITY* is a decimal
     number.  Header rows and free-text lines are ignored automatically.
     """
 
@@ -34,7 +34,7 @@ class GenericTableParser(BaseBrokerParser):
                 for line in text.splitlines():
                     m = _ROW_RE.match(line.strip())
                     if m:
-                        ticker = m.group(1).upper()
+                        wkn = m.group(1).upper()
                         quantity = Decimal(m.group(2))
-                        results.append((ticker, quantity))
+                        results.append((wkn, quantity))
         return results

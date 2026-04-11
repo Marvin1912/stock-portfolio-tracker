@@ -16,12 +16,12 @@ from app.services.pdf_parser import BaseBrokerParser
 class ImportService:
     """Upsert holdings extracted from a broker PDF into the database.
 
-    For each ``(ticker, quantity)`` pair the parser returns:
+    For each ``(wkn, quantity)`` pair the parser returns:
 
     * If a :class:`~app.models.holding.Holding` already exists for that
-      ticker its ``quantity`` is **increased** by the extracted amount.
+      WKN its ``quantity`` is **increased** by the extracted amount.
     * If no holding exists yet, a new one is created.
-    * Tickers without a matching :class:`~app.models.stock.Stock` row are
+    * WKNs without a matching :class:`~app.models.stock.Stock` row are
       silently skipped.
     """
 
@@ -36,7 +36,7 @@ class ImportService:
         Returns
         -------
         list[tuple[str, Decimal]]
-            ``(ticker, quantity_added)`` pairs for every ticker that was
+            ``(wkn, quantity_added)`` pairs for every WKN that was
             successfully processed (i.e. had a matching Stock record).
         """
         pairs = parser.extract(pdf_path)
@@ -47,19 +47,19 @@ class ImportService:
         pairs: list[tuple[str, Decimal]],
         db: AsyncSession,
     ) -> list[tuple[str, Decimal]]:
-        """Upsert a list of ``(ticker, quantity)`` pairs into the database.
+        """Upsert a list of ``(wkn, quantity)`` pairs into the database.
 
         Returns
         -------
         list[tuple[str, Decimal]]
-            ``(ticker, quantity_added)`` pairs for every ticker that was
+            ``(wkn, quantity_added)`` pairs for every WKN that was
             successfully processed (i.e. had a matching Stock record).
         """
         processed: list[tuple[str, Decimal]] = []
 
-        for ticker, qty in pairs:
+        for wkn, qty in pairs:
             stock_row = await db.execute(
-                select(Stock).where(Stock.ticker == ticker)
+                select(Stock).where(Stock.wkn == wkn)
             )
             stock = stock_row.scalar_one_or_none()
             if stock is None:
@@ -75,7 +75,7 @@ class ImportService:
             else:
                 holding.quantity += qty
 
-            processed.append((ticker, qty))
+            processed.append((wkn, qty))
 
         await db.flush()
         return processed

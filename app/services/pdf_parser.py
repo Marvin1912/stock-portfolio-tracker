@@ -11,8 +11,8 @@ class BaseBrokerParser(abc.ABC):
     """Abstract base for broker-specific PDF parsers.
 
     Subclasses implement :meth:`extract` for a particular broker's layout.
-    Each parser returns only the data needed to upsert a holding: the ticker
-    symbol and the share quantity.
+    Each parser returns only the data needed to upsert a holding: the WKN
+    and the share quantity.
     """
 
     @abc.abstractmethod
@@ -27,7 +27,7 @@ class BaseBrokerParser(abc.ABC):
         Returns
         -------
         list[tuple[str, Decimal]]
-            A list of ``(ticker, quantity)`` pairs, one per holding found in
-            the document.  Ticker symbols are returned upper-cased and
-            stripped of whitespace.
+            A list of ``(wkn, quantity)`` pairs, one per holding found in
+            the document.  WKNs are returned upper-cased and stripped of
+            whitespace.
         """

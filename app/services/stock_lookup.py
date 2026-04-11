@@ -10,20 +10,20 @@ from functools import partial
 
 @dataclass
 class StockInfo:
-    ticker: str
+    wkn: str
     name: str
     currency: str
     current_price: Decimal | None
 
 
-def _fetch_stock_info_sync(ticker: str) -> StockInfo | None:
+def _fetch_stock_info_sync(wkn: str) -> StockInfo | None:
     """Synchronous yfinance call — run in a thread executor."""
     import yfinance as yf  # type: ignore[import-untyped]  # no stubs available
 
-    t = yf.Ticker(ticker.upper())
+    t = yf.Ticker(wkn.upper())
     info = t.info
 
-    # yfinance returns a minimal dict for unknown tickers
+    # yfinance returns a minimal dict for unknown symbols
     name = info.get("longName") or info.get("shortName")
     if not name:
         return None
@@ -33,14 +33,14 @@ def _fetch_stock_info_sync(ticker: str) -> StockInfo | None:
     current_price = Decimal(str(price_raw)) if price_raw is not None else None
 
     return StockInfo(
-        ticker=ticker.upper(),
+        wkn=wkn.upper(),
         name=name,
         currency=currency,
         current_price=current_price,
     )
 
 
-async def fetch_stock_info(ticker: str) -> StockInfo | None:
-    """Return stock info from yfinance, or None if the ticker is invalid."""
+async def fetch_stock_info(wkn: str) -> StockInfo | None:
+    """Return stock info from yfinance, or None if the WKN is invalid."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, partial(_fetch_stock_info_sync, ticker))
+    return await loop.run_in_executor(None, partial(_fetch_stock_info_sync, wkn))

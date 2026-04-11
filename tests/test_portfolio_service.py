@@ -19,7 +19,6 @@ def _make_holding(
 ) -> MagicMock:
     stock = MagicMock()
     stock.wkn = wkn
-    stock.ticker = wkn  # internal ticker (same value for test simplicity)
     stock.name = name
     stock.current_price = Decimal(current_price) if current_price else None
 
