@@ -30,12 +30,12 @@ def _make_settings() -> Settings:
     )
 
 
-def _make_session_factory(tickers: list[str]) -> AsyncMock:
-    """Return a mock async_sessionmaker that yields a session with the given tickers."""
+def _make_session_factory(wkns: list[str]) -> AsyncMock:
+    """Return a mock async_sessionmaker that yields a session with the given wkns."""
     session = AsyncMock()
-    tickers_result = MagicMock()
-    tickers_result.scalars.return_value.all.return_value = tickers
-    session.execute = AsyncMock(return_value=tickers_result)
+    wkns_result = MagicMock()
+    wkns_result.scalars.return_value.all.return_value = wkns
+    session.execute = AsyncMock(return_value=wkns_result)
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
 
@@ -87,7 +87,7 @@ def test_monthly_report_job_scheduled_on_1st_at_08_00() -> None:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_run_price_cache_refresh_no_tickers_logs_and_returns() -> None:
+async def test_run_price_cache_refresh_no_wkns_logs_and_returns() -> None:
     factory = _make_session_factory([])
 
     with patch("app.scheduler.refresh_price_cache") as mock_refresh:
@@ -97,14 +97,14 @@ async def test_run_price_cache_refresh_no_tickers_logs_and_returns() -> None:
 
 @pytest.mark.asyncio
 async def test_run_price_cache_refresh_calls_service() -> None:
-    factory = _make_session_factory(["AAPL", "TSLA"])
+    factory = _make_session_factory(["865985", "716461"])
 
     with patch("app.scheduler.refresh_price_cache", new_callable=AsyncMock) as mock_refresh:
         await run_price_cache_refresh(factory)
         mock_refresh.assert_called_once()
-        called_tickers = mock_refresh.call_args[0][0]
-        assert "AAPL" in called_tickers
-        assert "TSLA" in called_tickers
+        called_wkns = mock_refresh.call_args[0][0]
+        assert "865985" in called_wkns
+        assert "716461" in called_wkns
 
 
 # ---------------------------------------------------------------------------

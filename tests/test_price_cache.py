@@ -35,7 +35,7 @@ async def test_get_price_found() -> None:
     expected = Decimal("150.1234")
     db = _make_db_mock(scalar_value=expected)
 
-    result = await get_price("AAPL", datetime.date(2025, 1, 10), db)
+    result = await get_price("865985", datetime.date(2025, 1, 10), db)
 
     assert result == expected
     db.execute.assert_awaited_once()
@@ -45,17 +45,17 @@ async def test_get_price_found() -> None:
 async def test_get_price_not_found() -> None:
     db = _make_db_mock(scalar_value=None)
 
-    result = await get_price("AAPL", datetime.date(2025, 1, 10), db)
+    result = await get_price("865985", datetime.date(2025, 1, 10), db)
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_get_price_uppercase_ticker() -> None:
-    """Ticker should be normalised to uppercase before querying."""
+async def test_get_price_uppercase_wkn() -> None:
+    """WKN should be normalised to uppercase before querying."""
     db = _make_db_mock(scalar_value=Decimal("50.00"))
 
-    await get_price("aapl", datetime.date(2025, 1, 10), db)
+    await get_price("a14y6f", datetime.date(2025, 1, 10), db)
 
     # Inspect the WHERE clause argument passed to execute — the compiled SQL
     # isn't easily introspectable, but we can verify execute was called at all.
@@ -82,7 +82,7 @@ async def test_refresh_price_cache_upserts_rows() -> None:
         "app.services.price_service._fetch_history",
         AsyncMock(return_value=_HISTORY),
     ):
-        await refresh_price_cache(["AAPL"], db)
+        await refresh_price_cache(["865985"], db)
 
     db.execute.assert_awaited_once()
     db.commit.assert_awaited_once()
@@ -98,7 +98,7 @@ async def test_refresh_price_cache_skips_empty_history() -> None:
         "app.services.price_service._fetch_history",
         AsyncMock(return_value={}),
     ):
-        await refresh_price_cache(["AAPL"], db)
+        await refresh_price_cache(["865985"], db)
 
     db.execute.assert_not_awaited()
     db.commit.assert_awaited_once()
@@ -115,14 +115,14 @@ async def test_refresh_price_cache_handles_fetch_error() -> None:
         AsyncMock(side_effect=RuntimeError("network error")),
     ):
         # Should not raise — errors are logged and skipped.
-        await refresh_price_cache(["AAPL"], db)
+        await refresh_price_cache(["865985"], db)
 
     db.execute.assert_not_awaited()
     db.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_refresh_price_cache_multiple_tickers() -> None:
+async def test_refresh_price_cache_multiple_wkns() -> None:
     db = AsyncMock(spec=AsyncSession)
     db.execute = AsyncMock()
     db.commit = AsyncMock()
@@ -131,7 +131,7 @@ async def test_refresh_price_cache_multiple_tickers() -> None:
         "app.services.price_service._fetch_history",
         AsyncMock(return_value=_HISTORY),
     ):
-        await refresh_price_cache(["AAPL", "MSFT"], db)
+        await refresh_price_cache(["865985", "870747"], db)
 
     assert db.execute.await_count == 2
     db.commit.assert_awaited_once()

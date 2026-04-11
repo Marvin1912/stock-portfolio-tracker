@@ -82,7 +82,7 @@ async def test_import_pdf_post_valid_pdf_shows_all_wkns(client: AsyncClient) -> 
 
 @pytest.mark.asyncio
 async def test_import_pdf_confirm_calls_import_service(client: AsyncClient) -> None:
-    processed = [("AAPL", Decimal("10")), ("MSFT", Decimal("5.5"))]
+    processed = [("865985", Decimal("10")), ("870747", Decimal("5.5"))]
 
     with patch(
         "app.routers.import_pdf._service.import_from_holdings",
@@ -91,15 +91,15 @@ async def test_import_pdf_confirm_calls_import_service(client: AsyncClient) -> N
         response = await client.post(
             "/import/pdf/confirm",
             data={
-                "wkns": ["AAPL", "MSFT"],
+                "wkns": ["865985", "870747"],
                 "quantities": ["10", "5.5"],
             },
         )
 
     assert response.status_code == 200
     assert "Import complete" in response.text
-    assert "AAPL" in response.text
-    assert "MSFT" in response.text
+    assert "865985" in response.text
+    assert "870747" in response.text
     assert "2 holding" in response.text
 
 
@@ -124,7 +124,7 @@ async def test_import_pdf_confirm_no_processed_shows_warning(client: AsyncClient
 @pytest.mark.asyncio
 async def test_import_pdf_confirm_invalid_quantity_skipped(client: AsyncClient) -> None:
     """Invalid quantity entries are skipped; valid ones are passed through."""
-    processed = [("AAPL", Decimal("5"))]
+    processed = [("865985", Decimal("5"))]
 
     with patch(
         "app.routers.import_pdf._service.import_from_holdings",
@@ -133,16 +133,16 @@ async def test_import_pdf_confirm_invalid_quantity_skipped(client: AsyncClient) 
         response = await client.post(
             "/import/pdf/confirm",
             data={
-                "wkns": ["AAPL", "MSFT"],
+                "wkns": ["865985", "870747"],
                 "quantities": ["5", "not-a-number"],
             },
         )
 
     assert response.status_code == 200
-    # Only AAPL with valid quantity should have been passed
+    # Only 865985 with valid quantity should have been passed
     call_pairs = mock_import.call_args[0][0]
     assert len(call_pairs) == 1
-    assert call_pairs[0] == ("AAPL", Decimal("5"))
+    assert call_pairs[0] == ("865985", Decimal("5"))
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,7 @@ async def test_import_pdf_confirm_all_invalid_returns_error(client: AsyncClient)
     response = await client.post(
         "/import/pdf/confirm",
         data={
-            "wkns": ["AAPL"],
+            "wkns": ["865985"],
             "quantities": ["bad"],
         },
     )
@@ -181,9 +181,9 @@ async def test_import_from_holdings_creates_new_holding() -> None:
     db.execute = AsyncMock(side_effect=[stock_result, holding_result])
 
     service = ImportService()
-    result = await service.import_from_holdings([("AAPL", Decimal("5"))], db)
+    result = await service.import_from_holdings([("865985", Decimal("5"))], db)
 
-    assert result == [("AAPL", Decimal("5"))]
+    assert result == [("865985", Decimal("5"))]
     db.add.assert_called_once()
 
 
@@ -208,9 +208,9 @@ async def test_import_from_holdings_increases_existing_holding() -> None:
     db.execute = AsyncMock(side_effect=[stock_result, holding_result])
 
     service = ImportService()
-    result = await service.import_from_holdings([("MSFT", Decimal("3"))], db)
+    result = await service.import_from_holdings([("870747", Decimal("3"))], db)
 
-    assert result == [("MSFT", Decimal("3"))]
+    assert result == [("870747", Decimal("3"))]
     assert holding.quantity == Decimal("13")
     db.add.assert_not_called()
 
@@ -221,7 +221,7 @@ async def test_import_from_pdf_delegates_to_import_from_holdings() -> None:
     from app.services.import_service import ImportService
 
     service = ImportService()
-    pairs = [("AAPL", Decimal("10"))]
+    pairs = [("865985", Decimal("10"))]
 
     parser = MagicMock()
     parser.extract.return_value = pairs
