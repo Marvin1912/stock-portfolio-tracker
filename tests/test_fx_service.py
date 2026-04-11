@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 import app.services.fx_service as fx_module
 from app.services.fx_service import refresh_fx_rates, to_eur
-
 
 # ---------------------------------------------------------------------------
 # Helpers
