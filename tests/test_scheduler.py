@@ -11,6 +11,7 @@ import pytest
 from app.config import Settings
 from app.scheduler import (
     create_scheduler,
+    run_fx_rate_refresh,
     run_monthly_report,
     run_price_cache_refresh,
 )
@@ -48,7 +49,7 @@ def _make_session_factory(tickers: list[str]) -> AsyncMock:
 # create_scheduler
 # ---------------------------------------------------------------------------
 
-def test_create_scheduler_registers_two_jobs() -> None:
+def test_create_scheduler_registers_three_jobs() -> None:
     settings = _make_settings()
     factory = MagicMock()
 
@@ -57,6 +58,7 @@ def test_create_scheduler_registers_two_jobs() -> None:
     jobs = scheduler.get_jobs()
     job_ids = {j.id for j in jobs}
     assert "refresh_price_cache" in job_ids
+    assert "refresh_fx_rates" in job_ids
     assert "send_monthly_report" in job_ids
 
 
@@ -105,6 +107,42 @@ async def test_run_price_cache_refresh_calls_service() -> None:
         called_tickers = mock_refresh.call_args[0][0]
         assert "AAPL" in called_tickers
         assert "TSLA" in called_tickers
+
+
+# ---------------------------------------------------------------------------
+# run_fx_rate_refresh
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_fx_rate_refresh_no_currencies_logs_and_returns() -> None:
+    factory = _make_session_factory([])
+
+    with patch("app.scheduler.refresh_fx_rates", new_callable=AsyncMock) as mock_refresh:
+        await run_fx_rate_refresh(factory)
+        mock_refresh.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_fx_rate_refresh_calls_service_with_currencies() -> None:
+    factory = _make_session_factory(["USD", "EUR"])
+
+    with patch("app.scheduler.refresh_fx_rates", new_callable=AsyncMock) as mock_refresh:
+        await run_fx_rate_refresh(factory)
+        mock_refresh.assert_called_once()
+        called_currencies = mock_refresh.call_args[0][0]
+        assert "USD" in called_currencies
+        assert "EUR" in called_currencies
+
+
+def test_fx_rate_job_scheduled_at_07_05() -> None:
+    settings = _make_settings()
+    scheduler = create_scheduler(settings, MagicMock())
+
+    job = next(j for j in scheduler.get_jobs() if j.id == "refresh_fx_rates")
+    trigger_repr = str(job.trigger)
+    assert "hour='7'" in trigger_repr
+    assert "minute='5'" in trigger_repr
 
 
 # ---------------------------------------------------------------------------

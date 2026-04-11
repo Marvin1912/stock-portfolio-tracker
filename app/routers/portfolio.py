@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_async_session
 from app.models.holding import Holding
+from app.services.fx_service import to_eur
 
 router = APIRouter(tags=["portfolio-ui"])
 
@@ -29,7 +30,6 @@ class HoldingRow:
     id: int
     ticker: str
     name: str
-    currency: str
     quantity: Decimal
     current_value: Decimal | None
 
@@ -50,7 +50,8 @@ async def portfolio_overview(
         stock = h.stock
         current_value: Decimal | None = None
         if stock.current_price is not None:
-            current_value = h.quantity * stock.current_price
+            eur_price = to_eur(stock.current_price, stock.currency)
+            current_value = h.quantity * eur_price
             total_value = (total_value or Decimal("0")) + current_value
 
         holding_rows.append(
@@ -58,7 +59,6 @@ async def portfolio_overview(
                 id=h.id,
                 ticker=stock.ticker,
                 name=stock.name,
-                currency=stock.currency,
                 quantity=h.quantity,
                 current_value=current_value,
             )

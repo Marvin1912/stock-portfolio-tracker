@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings
 from app.models.stock import Stock
+from app.services.fx_service import refresh_fx_rates
 from app.services.price_service import refresh_price_cache
 from app.services.report_service import ReportService
 
@@ -35,6 +36,20 @@ async def run_price_cache_refresh(session_factory: async_sessionmaker[AsyncSessi
         await refresh_price_cache(tickers, db)
 
     logger.info("Price cache refresh complete for %d ticker(s).", len(tickers))
+
+
+async def run_fx_rate_refresh(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Fetch all distinct currencies from tracked stocks and refresh FX cache."""
+    async with session_factory() as db:
+        currencies_result = await db.execute(select(Stock.currency).distinct())
+        currencies = list(currencies_result.scalars().all())
+
+    if not currencies:
+        logger.info("FX rate refresh: no currencies to refresh.")
+        return
+
+    await refresh_fx_rates(currencies)
+    logger.info("FX rate refresh complete for %d currency/ies.", len(currencies))
 
 
 async def run_monthly_report(session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -64,7 +79,8 @@ def create_scheduler(
     """Build and return a configured AsyncIOScheduler (not yet started).
 
     Schedule 1 — daily price cache refresh at 07:00.
-    Schedule 2 — monthly report generation on the 1st of each month at 08:00.
+    Schedule 2 — daily FX rate refresh at 07:05.
+    Schedule 3 — monthly report generation on the 1st of each month at 08:00.
 
     Args:
         settings: Application settings used for timezone configuration.
@@ -82,6 +98,16 @@ def create_scheduler(
         minute=0,
         args=[session_factory],
         id="refresh_price_cache",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        run_fx_rate_refresh,
+        trigger="cron",
+        hour=7,
+        minute=5,
+        args=[session_factory],
+        id="refresh_fx_rates",
         replace_existing=True,
     )
 

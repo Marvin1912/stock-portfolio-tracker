@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.models.holding import Holding
 from app.models.price_cache import PriceCache
 from app.schemas.holdings import HoldingSummaryItem, PortfolioSummary
+from app.services.fx_service import to_eur
 
 
 class PortfolioService:
@@ -31,8 +32,10 @@ class PortfolioService:
 
         for h in holdings:
             current_value: Decimal | None = None
+            eur_price: Decimal | None = None
             if h.stock.current_price is not None:
-                current_value = h.quantity * h.stock.current_price
+                eur_price = to_eur(h.stock.current_price, h.stock.currency)
+                current_value = h.quantity * eur_price
                 total_value = (total_value or Decimal("0")) + current_value
 
             items.append(
@@ -41,7 +44,7 @@ class PortfolioService:
                     ticker=h.stock.ticker,
                     name=h.stock.name,
                     quantity=h.quantity,
-                    current_price=h.stock.current_price,
+                    current_price=eur_price,
                     current_value=current_value,
                 )
             )

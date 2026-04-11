@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.database import get_async_session
 from app.models.holding import Holding
 from app.models.stock import Stock
+from app.services.fx_service import to_eur
 from app.services.openfigi_lookup import resolve_wkn
 from app.services.stock_lookup import fetch_stock_info
 
@@ -177,7 +178,11 @@ async def htmx_create_holding(
     await db.flush()
     await db.refresh(holding)
 
-    current_value = qty * stock.current_price if stock.current_price is not None else None
+    current_value = (
+        qty * to_eur(stock.current_price, stock.currency)
+        if stock.current_price is not None
+        else None
+    )
     return _render(
         request,
         "partials/holding_row.html",
@@ -186,7 +191,6 @@ async def htmx_create_holding(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
-                "currency": stock.currency,
                 "quantity": qty,
                 "current_value": current_value,
             }
@@ -210,7 +214,9 @@ async def holding_row(
         return HTMLResponse("", status_code=404)
     stock = holding.stock
     current_value = (
-        holding.quantity * stock.current_price if stock.current_price is not None else None
+        holding.quantity * to_eur(stock.current_price, stock.currency)
+        if stock.current_price is not None
+        else None
     )
     return _render(
         request,
@@ -220,7 +226,6 @@ async def holding_row(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
-                "currency": stock.currency,
                 "quantity": holding.quantity,
                 "current_value": current_value,
             }
@@ -251,7 +256,6 @@ async def edit_holding_form(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
-                "currency": stock.currency,
                 "quantity": holding.quantity,
             }
         },
@@ -284,7 +288,6 @@ async def htmx_update_holding(
                     "id": holding.id,
                     "ticker": stock.ticker,
                     "name": stock.name,
-                    "currency": stock.currency,
                     "quantity": holding.quantity,
                 },
             },
@@ -294,7 +297,11 @@ async def htmx_update_holding(
     await db.flush()
     await db.refresh(holding)
     stock = holding.stock
-    current_value = qty * stock.current_price if stock.current_price is not None else None
+    current_value = (
+        qty * to_eur(stock.current_price, stock.currency)
+        if stock.current_price is not None
+        else None
+    )
 
     return _render(
         request,
@@ -304,7 +311,6 @@ async def htmx_update_holding(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
-                "currency": stock.currency,
                 "quantity": qty,
                 "current_value": current_value,
             }

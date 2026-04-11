@@ -19,6 +19,7 @@ from app.database import get_async_session
 from app.models.holding import Holding
 from app.models.price_cache import PriceCache
 from app.models.stock import Stock
+from app.services.fx_service import to_eur
 
 router = APIRouter(tags=["stocks"])
 
@@ -32,7 +33,6 @@ _DB = Depends(get_async_session)
 class StockDetail:
     ticker: str
     name: str
-    currency: str
     current_price: Decimal | None
     quantity: Decimal | None
     current_value: Decimal | None
@@ -63,16 +63,18 @@ async def stock_detail(
 
     quantity: Decimal | None = None
     current_value: Decimal | None = None
+    eur_price: Decimal | None = None
+    if stock.current_price is not None:
+        eur_price = to_eur(stock.current_price, stock.currency)
     if holding is not None:
         quantity = holding.quantity
-        if stock.current_price is not None:
-            current_value = quantity * stock.current_price
+        if eur_price is not None:
+            current_value = quantity * eur_price
 
     detail = StockDetail(
         ticker=stock.ticker,
         name=stock.name,
-        currency=stock.currency,
-        current_price=stock.current_price,
+        current_price=eur_price,
         quantity=quantity,
         current_value=current_value,
     )
