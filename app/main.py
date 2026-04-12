@@ -28,7 +28,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     """
     import asyncio
 
-    from app.scheduler import create_scheduler, run_price_cache_refresh
+    from app.scheduler import create_scheduler, run_fx_rate_refresh, run_price_cache_refresh
 
     settings: Settings = application.state.settings
     logger.info("Starting up — env=%s", settings.app_env)
@@ -47,6 +47,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
     # Run an initial cache warm-up in the background so it doesn't block startup.
     asyncio.create_task(run_price_cache_refresh(_sched_factory))
+    asyncio.create_task(run_fx_rate_refresh(_sched_factory))
 
     yield
 

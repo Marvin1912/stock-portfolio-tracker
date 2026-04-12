@@ -10,9 +10,88 @@ logger = logging.getLogger(__name__)
 
 _OPENFIGI_URL = "https://api.openfigi.com/v3/mapping"
 
+# Mapping from OpenFIGI exchCode to yfinance ticker suffix.
+# Ordered by preference: primary/most-liquid exchanges first.
+# exchCodes not listed here are treated as US-listed (no suffix needed).
+_EXCHCODE_TO_SUFFIX: dict[str, str] = {
+    # Germany
+    "GR": ".DE",   # XETRA (primary German exchange)
+    "GF": ".F",    # Frankfurt
+    "GM": ".MU",   # Munich
+    "GY": ".SG",   # Stuttgart
+    "GS": ".SG",   # Stuttgart (alt code)
+    "GH": ".HM",   # Hamburg
+    "GI": ".HM",   # Hamburg (alt code)
+    "GD": ".DU",   # Düsseldorf
+    # Austria
+    "AV": ".VI",   # Vienna
+    # Switzerland
+    "SW": ".SW",   # SIX Swiss Exchange
+    # UK
+    "LN": ".L",    # London Stock Exchange
+    # France
+    "FP": ".PA",   # Euronext Paris
+    # Netherlands
+    "NA": ".AS",   # Euronext Amsterdam
+    # Italy
+    "IM": ".MI",   # Borsa Italiana Milan
+    # Spain
+    "SM": ".MC",   # Madrid
+    # Belgium
+    "BB": ".BR",   # Euronext Brussels
+    # Portugal
+    "PL": ".LS",   # Euronext Lisbon
+    # Sweden
+    "SS": ".ST",   # Stockholm
+    # Norway
+    "NO": ".OL",   # Oslo
+    # Denmark
+    "DC": ".CO",   # Copenhagen
+    # Finland
+    "FH": ".HE",   # Helsinki
+    # Australia
+    "AT": ".AX",   # ASX
+    # Japan
+    "JT": ".T",    # Tokyo
+    # Hong Kong
+    "HK": ".HK",   # Hong Kong
+    # Canada
+    "CT": ".TO",   # Toronto
+    # Mexico
+    "MM": ".MX",   # Mexico
+}
+
+# Preferred exchCodes in priority order when multiple results are returned.
+# We prefer the most liquid / primary listing for each region.
+_PREFERRED_EXCHCODES = [
+    "GR",   # XETRA — primary German exchange
+    "LN",   # London
+    "FP",   # Paris
+    "NA",   # Amsterdam
+    "IM",   # Milan
+    "SM",   # Madrid
+    "SW",   # Swiss
+    "AV",   # Vienna
+    "AT",   # ASX
+    "JT",   # Tokyo
+    "HK",   # Hong Kong
+    "CT",   # Toronto
+    "US",   # US (no suffix)
+]
+
+
+def _build_yfinance_ticker(ticker: str, exch_code: str) -> str:
+    """Append the appropriate yfinance exchange suffix for the given exchCode."""
+    suffix = _EXCHCODE_TO_SUFFIX.get(exch_code, "")
+    return f"{ticker}{suffix}"
+
 
 async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
     """Return the ticker symbol for a WKN, or None if it cannot be resolved.
+
+    The returned ticker includes the yfinance exchange suffix (e.g. ``RHM.DE``
+    for Rheinmetall AG on XETRA) so that yfinance can unambiguously identify
+    the correct security.
 
     Args:
         wkn: The 6-character WKN (Wertpapierkennnummer) to resolve.
@@ -20,7 +99,8 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
                  Unauthenticated requests are limited to 25 req/min.
 
     Returns:
-        The resolved ticker symbol (upper-case), or None on failure.
+        The resolved ticker symbol (upper-case, with exchange suffix), or None
+        on failure.
     """
     wkn = wkn.strip().upper()
     if not wkn:
@@ -44,9 +124,44 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
         logger.warning("Unexpected error during OpenFIGI lookup for WKN %s: %s", wkn, exc)
         return None
 
-    # Response shape: [{"data": [{"ticker": "AAPL", ...}]}]
+    # Response shape: [{"data": [{"ticker": "RHM", "exchCode": "GR", ...}]}]
     try:
-        ticker = data[0]["data"][0]["ticker"]
-        return str(ticker).upper() if ticker else None
+        results: list[dict] = data[0]["data"]
     except (KeyError, IndexError, TypeError):
         return None
+
+    if not results:
+        return None
+
+    # Build a lookup: exchCode → first matching result
+    by_exch: dict[str, dict] = {}
+    for item in results:
+        code = item.get("exchCode", "")
+        if code and code not in by_exch:
+            by_exch[code] = item
+
+    # Pick the best result according to our preference order
+    chosen: dict | None = None
+    for preferred in _PREFERRED_EXCHCODES:
+        if preferred in by_exch:
+            chosen = by_exch[preferred]
+            break
+
+    # Fall back to the first result if none of the preferred codes matched
+    if chosen is None:
+        chosen = results[0]
+
+    ticker = chosen.get("ticker")
+    if not ticker:
+        return None
+
+    exch_code = chosen.get("exchCode", "")
+    yf_ticker = _build_yfinance_ticker(str(ticker).upper(), exch_code)
+    logger.debug(
+        "WKN %s resolved to OpenFIGI ticker %s (exchCode=%s) → yfinance ticker %s",
+        wkn,
+        ticker,
+        exch_code,
+        yf_ticker,
+    )
+    return yf_ticker

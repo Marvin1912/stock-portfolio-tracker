@@ -387,6 +387,13 @@
 </script>
 {% endif %}
 <script>
+  // Open add-form-slot after HTMX loads the add holding form
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && evt.detail.target.id === 'add-form-slot') {
+      evt.detail.target.classList.add('open');
+    }
+  });
+
   // Delete row collapse animation
   document.body.addEventListener('htmx:beforeSwap', function(evt) {
     var target = evt.detail.target;

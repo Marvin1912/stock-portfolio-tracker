@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -259,7 +260,12 @@ async def edit_holding_form(
     holding_id: int,
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
-    holding = await db.get(Holding, holding_id)
+    result = await db.execute(
+        select(Holding)
+        .options(selectinload(Holding.stock))
+        .where(Holding.id == holding_id)
+    )
+    holding = result.scalar_one_or_none()
     if holding is None:
         return HTMLResponse("Not found", status_code=404)
     stock = holding.stock
