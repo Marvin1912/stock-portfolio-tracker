@@ -17,11 +17,12 @@ FROM python:3.12-alpine AS runtime
 
 WORKDIR /app
 
-# Install only the shared libraries needed at runtime by compiled extensions.
-RUN apk add --no-cache \
-    libpq \
-    libjpeg \
-    libffi
+# No extra apk packages needed:
+#   - asyncpg has its own protocol impl and does not link libpq
+#   - Pillow musllinux wheel bundles libjpeg/libfreetype/etc. in pillow.libs/
+#   - libffi is already present in the python:3.12-alpine base image
+# The only external system lib linked by any .so is libz, which is also
+# already provided by the base image.
 
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
