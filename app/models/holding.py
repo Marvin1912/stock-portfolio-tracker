@@ -18,11 +18,11 @@ class Holding(Base):
     """Represents the current holding of a stock in the portfolio."""
 
     __tablename__ = "holding"
-    __table_args__ = {"schema": "costs"}
+    __table_args__ = {"schema": "finance"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     stock_id: Mapped[int] = mapped_column(
-        ForeignKey("costs.stock.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("finance.stock.id", ondelete="CASCADE"), nullable=False
     )
     quantity: Mapped[Decimal] = mapped_column(
         Numeric(precision=18, scale=8), nullable=False

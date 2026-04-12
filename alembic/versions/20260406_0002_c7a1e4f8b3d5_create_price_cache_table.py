@@ -29,9 +29,9 @@ def upgrade() -> None:
         sa.Column("close_price", sa.Numeric(precision=18, scale=4), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("ticker", "date", name="uq_price_cache_ticker_date"),
-        schema="costs",
+        schema="finance",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("price_cache", schema="costs")
+    op.drop_table("price_cache", schema="finance")

@@ -17,7 +17,7 @@ class PriceCache(Base):
     __tablename__ = "price_cache"
     __table_args__ = (
         UniqueConstraint("ticker", "date", name="uq_price_cache_ticker_date"),
-        {"schema": "costs"},
+        {"schema": "finance"},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

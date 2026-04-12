@@ -22,7 +22,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE SCHEMA IF NOT EXISTS costs")
+    op.execute("CREATE SCHEMA IF NOT EXISTS finance")
 
     op.create_table(
         "stock",
@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column("currency", sa.String(length=10), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("ticker", name="uq_stock_ticker"),
-        schema="costs",
+        schema="finance",
     )
 
     op.create_table(
@@ -42,15 +42,15 @@ def upgrade() -> None:
         sa.Column("quantity", sa.Numeric(precision=18, scale=8), nullable=False),
         sa.ForeignKeyConstraint(
             ["stock_id"],
-            ["costs.stock.id"],
+            ["finance.stock.id"],
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        schema="costs",
+        schema="finance",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("holding", schema="costs")
-    op.drop_table("stock", schema="costs")
-    op.execute("DROP SCHEMA IF EXISTS costs")
+    op.drop_table("holding", schema="finance")
+    op.drop_table("stock", schema="finance")
+    op.execute("DROP SCHEMA IF EXISTS finance")
