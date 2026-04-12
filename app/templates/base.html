@@ -220,6 +220,122 @@
     .actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
     .note { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
 
+    /* ── Step indicator ──────────────────────────────────────── */
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 2rem;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      letter-spacing: 0.03em;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: var(--muted);
+      opacity: 0.5;
+    }
+    .step-item.active {
+      color: var(--accent);
+      opacity: 1;
+    }
+    .step-item.completed {
+      color: var(--accent);
+      opacity: 0.7;
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid currentColor;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .step-item.active .step-num {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+    .step-arrow {
+      color: var(--border);
+      margin: 0 0.7rem;
+      font-size: 0.75rem;
+      user-select: none;
+    }
+
+    /* ── Drop zone ───────────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--accent);
+      border-radius: var(--radius);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      margin-bottom: 1.25rem;
+      transition: background 0.15s;
+      cursor: pointer;
+      position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      background: rgba(34, 211, 160, 0.06);
+    }
+    .drop-zone-icon {
+      display: block;
+      margin: 0 auto 0.75rem;
+      color: var(--accent);
+    }
+    .drop-zone-text {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+    .drop-zone-text strong {
+      color: var(--accent);
+    }
+    .file-badge {
+      display: inline-block;
+      background: rgba(34, 211, 160, 0.1);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: var(--radius-sm);
+      letter-spacing: 0.04em;
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .selected-file {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+
+    /* ── Striped table rows (preview/done) ───────────────────── */
+    .table-striped tbody tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.015);
+    }
+    .table-striped tbody tr:nth-child(odd) {
+      background: transparent;
+    }
+
+    /* ── Done state ──────────────────────────────────────────── */
+    .done-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.25rem;
+    }
+
     /* ── Utility classes ─────────────────────────────────────── */
     .text-mono { font-family: var(--font-mono); }
     .positive  { color: var(--accent); }
