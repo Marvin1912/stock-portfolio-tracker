@@ -183,7 +183,7 @@ async def htmx_create_holding(
         if stock.current_price is not None
         else None
     )
-    return _render(
+    row_resp = _render(
         request,
         "partials/holding_row.html",
         {
@@ -196,6 +196,21 @@ async def htmx_create_holding(
             }
         },
     )
+    row_html = bytes(row_resp.body).decode()
+    # OOB swap: append row to tbody with flash animation, clear form slot
+    oob_attr = 'class="anim-flash" hx-swap-oob="beforeend:#holdings-tbody"'
+    oob_html = (
+        row_html.replace(
+            f'<tr id="holding-row-{holding.id}">',
+            f'<tr id="holding-row-{holding.id}" {oob_attr}>',
+        )
+        + "\n<script>"
+        "var s=document.getElementById('add-form-slot');"
+        "s.classList.remove('open');"
+        "setTimeout(function(){s.innerHTML='';},300);"
+        "</script>"
+    )
+    return HTMLResponse(oob_html)
 
 
 # ---------------------------------------------------------------------------

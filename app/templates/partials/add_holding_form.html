@@ -2,9 +2,8 @@
   <h2>Add Holding</h2>
   <form
     hx-post="/htmx/holdings"
-    hx-target="#holdings-tbody"
-    hx-swap="beforeend"
-    hx-on::after-request="if(event.detail.successful && event.detail.elt === this) this.closest('#add-holding-form').remove()">
+    hx-target="#add-form-slot"
+    hx-swap="innerHTML">
     {% if error %}
     <div class="form-error">{{ error }}</div>
     {% endif %}
@@ -68,7 +67,7 @@
       <button type="submit" class="btn-primary">Add</button>
       <button
         type="button"
-        onclick="document.getElementById('add-holding-form').remove()"
+        onclick="var s=document.getElementById('add-form-slot'); s.classList.remove('open'); setTimeout(function(){s.innerHTML='';},300)"
         class="btn-ghost">Cancel</button>
     </div>
   </form>
