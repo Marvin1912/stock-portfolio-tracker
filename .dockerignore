@@ -1,0 +1,25 @@
+# Python virtual environment – never needed in image
+.venv/
+
+# Version control
+.git/
+.gitignore
+
+# Dev tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+
+# Tests – not needed at runtime
+tests/
+
+# Compiled Python files
+*.pyc
+*.pyo
+__pycache__/
+
+# Editor / OS artefacts
+.DS_Store
+*.swp
