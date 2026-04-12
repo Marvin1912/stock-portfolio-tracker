@@ -24,9 +24,9 @@ def upgrade() -> None:
     op.add_column(
         "stock",
         sa.Column("current_price", sa.Numeric(precision=18, scale=4), nullable=True),
-        schema="costs",
+        schema="finance",
     )
 
 
 def downgrade() -> None:
-    op.drop_column("stock", "current_price", schema="costs")
+    op.drop_column("stock", "current_price", schema="finance")

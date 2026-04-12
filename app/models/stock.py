@@ -20,7 +20,7 @@ class Stock(Base):
     __tablename__ = "stock"
     __table_args__ = (
         UniqueConstraint("ticker", name="uq_stock_ticker"),
-        {"schema": "costs"},
+        {"schema": "finance"},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

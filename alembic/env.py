@@ -35,7 +35,7 @@ settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Read the search_path configured in alembic.ini.
-_search_path = config.get_main_option("search_path", "costs")
+_search_path = config.get_main_option("search_path", "finance")
 
 # Attach Python logging configuration from alembic.ini.
 if config.config_file_name is not None:
