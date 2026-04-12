@@ -1,5 +1,10 @@
 <tr id="holding-row-{{ holding.id }}">
-  <td><a href="/stocks/{{ holding.ticker }}">{{ holding.name }} ({{ holding.ticker }})</a></td>
+  <td>
+    <a href="/stocks/{{ holding.ticker }}" style="text-decoration: none;">
+      <span class="holding-ticker">{{ holding.ticker }}</span>
+      <span class="holding-name">{{ holding.name }}</span>
+    </a>
+  </td>
   <td class="number">{{ holding.quantity }}</td>
   <td class="number">
     {% if holding.current_value is not none %}

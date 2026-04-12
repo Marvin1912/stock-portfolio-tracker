@@ -1,5 +1,5 @@
 {% if valid %}
-<span class="ticker-valid">&#10003; {{ name }}</span>
+<span class="ticker-hint positive"><span class="ticker-hint-dot"></span> {{ name }}</span>
 {% else %}
-<span class="ticker-invalid">&#10007; Ticker not found</span>
+<span class="ticker-hint negative"><span class="ticker-hint-dot"></span> Ticker not found</span>
 {% endif %}

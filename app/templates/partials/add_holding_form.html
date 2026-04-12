@@ -18,6 +18,7 @@
           value="{{ ticker or '' }}"
           placeholder="e.g. AAPL"
           autocomplete="off"
+          class="input-mono input-glow"
           oninput="toggleWknTicker(this, 'wkn', 'ticker-hint', 'wkn-hint')"
           hx-get="/htmx/validate-ticker"
           hx-trigger="input changed delay:600ms"
@@ -27,7 +28,7 @@
         <span id="ticker-hint"></span>
       </div>
     </div>
-    <div class="form-row form-or-divider">
+    <div class="form-or-divider">
       <span class="or-label">OR</span>
     </div>
     <div class="form-row">
@@ -40,6 +41,7 @@
           value="{{ wkn or '' }}"
           placeholder="e.g. 840400"
           autocomplete="off"
+          class="input-mono input-glow"
           oninput="toggleWknTicker(this, 'ticker', 'wkn-hint', 'ticker-hint')"
           hx-get="/htmx/validate-wkn"
           hx-trigger="input changed delay:600ms"
@@ -59,14 +61,15 @@
         min="0.00000001"
         step="any"
         placeholder="e.g. 10"
-        required>
+        required
+        class="input-mono input-glow">
     </div>
     <div class="form-actions">
-      <button type="submit" class="btn-save">Add</button>
+      <button type="submit" class="btn-primary">Add</button>
       <button
         type="button"
         onclick="document.getElementById('add-holding-form').remove()"
-        class="btn-cancel">Cancel</button>
+        class="btn-ghost">Cancel</button>
     </div>
   </form>
 </div>
