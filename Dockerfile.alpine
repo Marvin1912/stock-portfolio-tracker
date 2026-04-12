@@ -1,0 +1,71 @@
+# ── Alpine-based Dockerfile ───────────────────────────────────────────────────
+# Experimental: evaluates python:3.12-alpine as a replacement for
+# python:3.12-slim (see GitHub issue #72).
+#
+# Tradeoffs vs. slim:
+#   + ~62 MB smaller uncompressed base layer (~38 MB compressed)
+#   - Requires recompiling several C/Rust extensions from source
+#   - Longer build times due to source compilation
+#   - musl libc instead of glibc (incompatible with manylinux wheels)
+#
+# Required Alpine build packages for source compilation:
+#   - gcc / g++ / musl-dev     → asyncpg, uvloop, cffi, cryptography
+#   - libffi-dev               → cffi, cryptography
+#   - postgresql-dev           → asyncpg (libpq headers)
+#   - jpeg-dev / zlib-dev      → Pillow
+#   - cargo / rust             → pydantic-core (Rust extension)
+#
+# These build-time packages are only needed in the builder stage and are NOT
+# copied into the runtime image, keeping the runtime layer lean.
+
+# ── Builder stage ─────────────────────────────────────────────────────────────
+FROM python:3.12-alpine AS builder
+
+WORKDIR /build
+
+# Install build-time system dependencies required to compile C/Rust extensions.
+# These are NOT included in the runtime image.
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    musl-dev \
+    libffi-dev \
+    postgresql-dev \
+    jpeg-dev \
+    zlib-dev \
+    cargo \
+    rust
+
+# Copy dependency manifest and install into an isolated prefix.
+# pip will fall back to source compilation for packages without musl wheels.
+COPY pyproject.toml README.md ./
+RUN pip install --upgrade pip && \
+    pip install --prefix=/install "." --no-cache-dir
+
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM python:3.12-alpine AS runtime
+
+WORKDIR /app
+
+# Install only the shared libraries needed at runtime (no compilers).
+# These are the dynamic libraries linked by the compiled extensions.
+RUN apk add --no-cache \
+    libpq \
+    libjpeg \
+    libffi
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application source
+COPY . .
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]
