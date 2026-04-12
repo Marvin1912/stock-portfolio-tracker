@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -126,7 +127,7 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
 
     # Response shape: [{"data": [{"ticker": "RHM", "exchCode": "GR", ...}]}]
     try:
-        results: list[dict] = data[0]["data"]
+        results: list[dict[str, Any]] = data[0]["data"]
     except (KeyError, IndexError, TypeError):
         return None
 
@@ -134,14 +135,14 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
         return None
 
     # Build a lookup: exchCode → first matching result
-    by_exch: dict[str, dict] = {}
+    by_exch: dict[str, dict[str, Any]] = {}
     for item in results:
         code = item.get("exchCode", "")
         if code and code not in by_exch:
             by_exch[code] = item
 
     # Pick the best result according to our preference order
-    chosen: dict | None = None
+    chosen: dict[str, Any] | None = None
     for preferred in _PREFERRED_EXCHCODES:
         if preferred in by_exch:
             chosen = by_exch[preferred]
@@ -155,7 +156,7 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
     if not ticker:
         return None
 
-    exch_code = chosen.get("exchCode", "")
+    exch_code = str(chosen.get("exchCode", ""))
     yf_ticker = _build_yfinance_ticker(str(ticker).upper(), exch_code)
     logger.debug(
         "WKN %s resolved to OpenFIGI ticker %s (exchCode=%s) → yfinance ticker %s",
