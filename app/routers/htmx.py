@@ -198,10 +198,11 @@ async def htmx_create_holding(
     )
     row_html = row_resp.body.decode()
     # OOB swap: append row to tbody with flash animation, clear form slot
+    oob_attr = 'class="anim-flash" hx-swap-oob="beforeend:#holdings-tbody"'
     oob_html = (
         row_html.replace(
             f'<tr id="holding-row-{holding.id}">',
-            f'<tr id="holding-row-{holding.id}" class="anim-flash" hx-swap-oob="beforeend:#holdings-tbody">',
+            f'<tr id="holding-row-{holding.id}" {oob_attr}>',
         )
         + "\n<script>"
         "var s=document.getElementById('add-form-slot');"
