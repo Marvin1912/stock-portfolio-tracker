@@ -199,7 +199,7 @@
 {% block content %}
 
   <!-- Hero stats bar -->
-  <div class="hero-bar">
+  <div class="hero-bar anim-fade-slide-down">
     <div class="hero-primary">
       <span class="hero-label">Total Portfolio Value</span>
       <span class="hero-value">
@@ -240,12 +240,12 @@
 
   <!-- Charts (only when there is data) -->
   {% if total_value is not none %}
-  <div class="chart-card">
+  <div class="chart-card anim-fade-in" style="animation-delay: 350ms">
     <h2>Performance</h2>
     <div id="performance-chart" style="height: 300px;"></div>
   </div>
 
-  <div class="chart-card">
+  <div class="chart-card anim-fade-in" style="animation-delay: 500ms">
     <h2>Allocation</h2>
     <div id="allocation-chart" style="height: 350px;"></div>
   </div>
@@ -264,7 +264,7 @@
     </thead>
     <tbody id="holdings-tbody">
       {% for row in holdings %}
-      <tr id="holding-row-{{ row.id }}">
+      <tr id="holding-row-{{ row.id }}" class="anim-stagger" style="--row-index: {{ loop.index0 }}">
         <td>
           <a href="/stocks/{{ row.ticker }}" style="text-decoration: none;">
             <span class="holding-ticker">{{ row.ticker }}</span>
@@ -386,4 +386,15 @@
   })();
 </script>
 {% endif %}
+<script>
+  // Delete row collapse animation
+  document.body.addEventListener('htmx:beforeSwap', function(evt) {
+    var target = evt.detail.target;
+    if (target && target.id && target.id.startsWith('holding-row-') && evt.detail.serverResponse === '') {
+      evt.detail.shouldSwap = false;
+      target.style.animation = 'row-collapse 250ms ease forwards';
+      target.addEventListener('animationend', function() { target.remove(); }, { once: true });
+    }
+  });
+</script>
 {% endblock %}

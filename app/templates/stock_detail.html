@@ -149,7 +149,7 @@
 
   <!-- Stats strip -->
   <div class="stats-strip">
-    <div class="stat-card">
+    <div class="stat-card anim-fade-slide-up" style="animation-delay: 0ms">
       <span class="stat-label">Quantity</span>
       <span class="stat-value{% if stock.quantity is none %} na{% endif %}">
         {% if stock.quantity is not none %}
@@ -159,7 +159,7 @@
         {% endif %}
       </span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card anim-fade-slide-up" style="animation-delay: 80ms">
       <span class="stat-label">Current Price</span>
       <span class="stat-value{% if stock.current_price is none %} na{% endif %}">
         {% if stock.current_price is not none %}
@@ -169,7 +169,7 @@
         {% endif %}
       </span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card anim-fade-slide-up" style="animation-delay: 160ms">
       <span class="stat-label">Current Value</span>
       <span class="stat-value{% if stock.current_value is none %} na{% endif %}">
         {% if stock.current_value is not none %}
@@ -182,7 +182,7 @@
   </div>
 
   <!-- Price history chart -->
-  <div class="chart-card">
+  <div class="chart-card anim-fade-in" style="animation-delay: 200ms">
     <div class="chart-card-title">Price History &middot; 1Y</div>
     <div id="price-history-chart" style="height: 300px;"></div>
   </div>
