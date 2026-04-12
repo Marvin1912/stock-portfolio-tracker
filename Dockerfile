@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy dependency manifest and install into an isolated prefix
 COPY pyproject.toml README.md ./
 RUN pip install --upgrade pip && \
-    pip install --prefix=/install ".[dev]" --no-cache-dir
+    pip install --prefix=/install "." --no-cache-dir
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
