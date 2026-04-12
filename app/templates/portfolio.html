@@ -84,7 +84,7 @@
   /* ── Holdings table ─────────────────────────────────────────── */
   .holdings-table {
     width: 100%;
-    border-collapse: separate;
+    border-collapse: collapse;
     border-spacing: 0;
     margin-bottom: 1.5rem;
   }
@@ -109,7 +109,15 @@
   .holdings-table th.actions,
   .holdings-table td.actions {
     text-align: right;
-    width: 130px;
+    width: 160px;
+    min-width: 160px;
+    white-space: nowrap;
+  }
+  .holdings-table td.actions {
+    display: table-cell;
+  }
+  .holdings-table td.actions button {
+    display: inline-block;
   }
   .holdings-table tbody tr {
     transition: background 150ms ease;
