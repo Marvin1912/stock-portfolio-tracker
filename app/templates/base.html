@@ -169,6 +169,19 @@
     .form-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
     .form-row label { min-width: 70px; font-weight: 600; font-size: 0.9rem; color: var(--muted); }
     .form-row input { width: 160px; }
+    .form-or-divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .form-or-divider::before,
+    .form-or-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
     .or-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
     .input-group { display: flex; align-items: center; gap: 0.5rem; }
     .form-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
@@ -194,6 +207,25 @@
     }
 
     /* ── Ticker hints ────────────────────────────────────────── */
+    .ticker-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .ticker-hint-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ticker-hint.positive .ticker-hint-dot { background: var(--accent); }
+    .ticker-hint.negative .ticker-hint-dot { background: var(--danger); }
+    .ticker-hint.positive { color: var(--accent); }
+    .ticker-hint.negative { color: var(--danger); }
     .ticker-valid   { color: var(--accent); font-size: 0.85rem; }
     .ticker-invalid { color: var(--danger);  font-size: 0.85rem; }
 
@@ -204,8 +236,10 @@
 
     /* ── Inline edit (portfolio table) ───────────────────────── */
     .inline-form { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
-    .qty-input { width: 100px; }
-    .editing td { background: rgba(34, 211, 160, 0.04); }
+    .qty-input { width: 100px; font-family: var(--font-mono); }
+    .editing td { background: #1c2128; }
+    .input-mono { font-family: var(--font-mono); }
+    .input-glow:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(34, 211, 160, 0.15); }
 
     /* ── Stock detail ────────────────────────────────────────── */
     .subtitle { color: var(--muted); margin-bottom: 2rem; font-family: var(--font-mono); font-size: 0.95rem; }

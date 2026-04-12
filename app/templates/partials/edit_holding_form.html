@@ -1,5 +1,8 @@
 <tr id="holding-row-{{ holding.id }}" class="editing">
-  <td>{{ holding.name }} ({{ holding.ticker }})</td>
+  <td>
+    <span class="holding-ticker">{{ holding.ticker }}</span>
+    <span class="holding-name">{{ holding.name }}</span>
+  </td>
   <td class="number" colspan="2">
     <form
       hx-put="/htmx/holdings/{{ holding.id }}"
@@ -16,15 +19,15 @@
         min="0.00000001"
         step="any"
         required
-        class="qty-input"
+        class="qty-input input-mono input-glow"
         autofocus>
-      <button type="submit" class="btn-save">Save</button>
+      <button type="submit" class="btn-primary" style="padding: 0.3rem 0.7rem; font-size: 0.85rem;">Save</button>
       <button
         type="button"
         hx-get="/htmx/holdings/{{ holding.id }}/row"
         hx-target="#holding-row-{{ holding.id }}"
         hx-swap="outerHTML"
-        class="btn-cancel">Cancel</button>
+        class="btn-ghost" style="padding: 0.3rem 0.7rem; font-size: 0.85rem;">Cancel</button>
     </form>
   </td>
   <td class="actions"></td>
