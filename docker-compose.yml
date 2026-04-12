@@ -26,7 +26,6 @@ services:
     environment:
       # Override DATABASE_URL to use the postgres container when running via docker compose
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/portfolio
-      DATABASE_SYNC_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/portfolio
     ports:
       - "8000:8000"
     depends_on:

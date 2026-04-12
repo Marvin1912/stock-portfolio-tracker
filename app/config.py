@@ -40,10 +40,6 @@ class Settings(BaseSettings):
         ...,
         description="Async SQLAlchemy URL — must use asyncpg driver.",
     )
-    database_sync_url: str = Field(
-        ...,
-        description="Sync SQLAlchemy URL for Alembic migrations (psycopg2).",
-    )
 
     # ------------------------------------------------------------------
     # Email / SMTP  (issue #20)

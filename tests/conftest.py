@@ -20,22 +20,20 @@ from app.config import Settings
 from app.main import create_app
 
 _DB_URL = os.environ.get("TEST_DATABASE_URL")
-_DB_SYNC_URL = os.environ.get("TEST_DATABASE_SYNC_URL")
 
 
 @pytest.fixture(scope="session")
 def test_settings() -> Settings:
     """Return a Settings instance suitable for testing.
 
-    Override TEST_DATABASE_URL / TEST_DATABASE_SYNC_URL via environment
-    variables in CI to point at a real test database.
+    Override TEST_DATABASE_URL via environment variable in CI to point
+    at a real test database.
     """
     return Settings(
         app_env="development",
         app_debug=True,
         secret_key="test-secret-key-that-is-long-enough-32chars",
         database_url=_DB_URL or "postgresql+asyncpg://postgres:postgres@localhost:5432/portfolio_test",
-        database_sync_url=_DB_SYNC_URL or "postgresql+psycopg2://postgres:postgres@localhost:5432/portfolio_test",
     )
 
 

@@ -1,17 +1,21 @@
 """Alembic migration environment.
 
-Reads DATABASE_SYNC_URL from the environment (via pydantic-settings) so
+Reads DATABASE_URL from the environment (via pydantic-settings) so
 that credentials are never stored in alembic.ini.  All application
 models must be imported (directly or transitively) through
 ``app.models`` so that ``Base.metadata`` is fully populated before
 Alembic inspects it.
+
+Uses the asyncpg driver exclusively — no psycopg2 dependency required.
 """
 
 from __future__ import annotations
 
+import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from alembic import context
 
@@ -26,9 +30,9 @@ from app.models import Base  # noqa: F401 — populates Base.metadata
 # ---------------------------------------------------------------------------
 config = context.config
 
-# Inject the sync database URL from pydantic-settings at runtime.
+# Inject the async database URL from pydantic-settings at runtime.
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_sync_url)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Read the search_path configured in alembic.ini.
 _search_path = config.get_main_option("search_path", "costs")
@@ -62,27 +66,38 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode (against a live database connection)."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        connect_args={"options": f"-csearch_path={_search_path}"},
+def do_run_migrations(connection: object) -> None:
+    """Run migrations against a live connection (called inside async context)."""
+    context.configure(
+        connection=connection,  # type: ignore[arg-type]
+        target_metadata=target_metadata,
+        compare_type=True,
+        compare_server_default=True,
+        include_schemas=True,
+        version_table_schema=_search_path,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-            compare_server_default=True,
-            include_schemas=True,
-            version_table_schema=_search_path,
-        )
+    with context.begin_transaction():
+        context.run_migrations()
 
-        with context.begin_transaction():
-            context.run_migrations()
+
+async def run_async_migrations() -> None:
+    """Create an async engine and run migrations inside a sync callback."""
+    connectable: AsyncEngine = create_async_engine(
+        settings.database_url,
+        poolclass=NullPool,
+        connect_args={"server_settings": {"search_path": _search_path}},
+    )
+
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+
+    await connectable.dispose()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode (against a live database connection)."""
+    asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

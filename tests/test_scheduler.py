@@ -26,7 +26,6 @@ def _make_settings() -> Settings:
         app_debug=False,
         secret_key="test-secret-key-that-is-long-enough-32chars",
         database_url="postgresql+asyncpg://postgres:postgres@localhost/test",
-        database_sync_url="postgresql+psycopg2://postgres:postgres@localhost/test",
         scheduler_timezone="UTC",
     )
 

@@ -29,9 +29,9 @@ Greenfield FastAPI + PostgreSQL stock portfolio tracker scaffolded 2026-04-06.
 **Key architectural decisions:**
 - App factory pattern: `create_app(settings)` in `app/main.py` so tests inject custom Settings
 - Database init/teardown in FastAPI lifespan (not at module import time)
-- Alembic reads `DATABASE_SYNC_URL` (psycopg2) from environment — never from alembic.ini
+- Alembic reads `DATABASE_URL` (asyncpg) from environment — never from alembic.ini; uses async engine via `asyncio.run`
 - `app/models/__init__.py` must import every model module so `Base.metadata` is complete for Alembic
 - `/health` is a liveness probe — no DB I/O, always returns `{"status": "ok"}`
-- Two DB URL env vars: `DATABASE_URL` (asyncpg, app) and `DATABASE_SYNC_URL` (psycopg2, alembic)
+- Single DB URL env var: `DATABASE_URL` (asyncpg) — used by both the app and Alembic migrations
 
 **How to apply:** When adding new models, import them in `app/models/__init__.py`. When adding new routes, register them in `app/main.py` under `/api/v1/`. Follow the service → repository → router layering already established.
