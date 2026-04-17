@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import plotly.graph_objects as go
+import plotly.io as pio
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -57,7 +58,7 @@ async def get_performance_chart(
         plot_bgcolor="#fff",
         paper_bgcolor="#fff",
     )
-    return JSONResponse(content=fig.to_dict())
+    return Response(content=pio.to_json(fig), media_type="application/json")
 
 
 @router.get("/chart/allocation")
