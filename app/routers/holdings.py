@@ -31,7 +31,7 @@ async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
 @router.get("/chart/performance")
 async def get_performance_chart(
     db: AsyncSession = _DB,
-) -> JSONResponse:
+) -> Response:
     """Return a Plotly line chart of total portfolio value over the past year."""
     performance = await PortfolioService().get_performance_history(db)
 
