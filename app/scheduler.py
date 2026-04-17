@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings
 from app.models.stock import Stock
-from app.services.fx_service import refresh_fx_rates
+from app.services.fx_service import load_fx_cache_from_db, refresh_fx_rates
 from app.services.price_service import refresh_price_cache
 from app.services.report_service import ReportService
 
@@ -44,12 +44,18 @@ async def run_fx_rate_refresh(session_factory: async_sessionmaker[AsyncSession])
         currencies_result = await db.execute(select(Stock.currency).distinct())
         currencies = list(currencies_result.scalars().all())
 
-    if not currencies:
-        logger.info("FX rate refresh: no currencies to refresh.")
-        return
+        if not currencies:
+            logger.info("FX rate refresh: no currencies to refresh.")
+            return
 
-    await refresh_fx_rates(currencies)
+        await refresh_fx_rates(currencies, db)
     logger.info("FX rate refresh complete for %d currency/ies.", len(currencies))
+
+
+async def run_fx_cache_warmup(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Warm the in-memory FX cache from the ``finance.fx_rate`` table."""
+    async with session_factory() as db:
+        await load_fx_cache_from_db(db)
 
 
 async def run_monthly_report(session_factory: async_sessionmaker[AsyncSession]) -> None:
