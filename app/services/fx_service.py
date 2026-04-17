@@ -1,7 +1,9 @@
 """Foreign exchange rate service for EUR conversion.
 
 Fetches live exchange rates via yfinance and caches them in memory.
-Rates are refreshed once daily by the scheduler.
+Rates are refreshed once daily by the scheduler and persisted to the
+``finance.fx_rate`` table so the cache can be warmed on startup and
+used as a fallback when yfinance is unavailable.
 """
 
 from __future__ import annotations
@@ -10,6 +12,12 @@ import asyncio
 import logging
 from decimal import Decimal
 from functools import partial
+
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.fx_rate import FxRate
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +42,59 @@ def _fetch_rate_sync(currency: str) -> Decimal | None:
     return Decimal(str(round(close, 6)))
 
 
-async def refresh_fx_rates(currencies: list[str]) -> None:
-    """Refresh the in-memory FX cache for the given currency codes.
+async def load_fx_cache_from_db(db: AsyncSession) -> int:
+    """Populate the in-memory FX cache from the ``finance.fx_rate`` table.
+
+    Returns the number of rates loaded (EUR is always set to 1 and is
+    not counted).
+    """
+    _fx_cache["EUR"] = Decimal("1")
+    result = await db.execute(select(FxRate.currency, FxRate.rate))
+    loaded = 0
+    for currency, rate in result.all():
+        cu = currency.upper()
+        if cu == "EUR":
+            continue
+        _fx_cache[cu] = rate
+        loaded += 1
+    logger.info("FX cache warmed from DB with %d rate(s).", loaded)
+    return loaded
+
+
+async def _persist_rate(db: AsyncSession, currency: str, rate: Decimal) -> None:
+    """Upsert the latest rate for *currency* into ``finance.fx_rate``."""
+    stmt = (
+        insert(FxRate)
+        .values(currency=currency, rate=rate)
+        .on_conflict_do_update(
+            index_elements=[FxRate.currency],
+            set_={"rate": rate, "updated_at": func.now()},
+        )
+    )
+    await db.execute(stmt)
+
+
+async def _fallback_from_db(db: AsyncSession, currency: str) -> Decimal | None:
+    """Load the last persisted rate for *currency* from the DB and cache it."""
+    result = await db.execute(
+        select(FxRate.rate).where(FxRate.currency == currency)
+    )
+    rate = result.scalar_one_or_none()
+    if rate is not None:
+        _fx_cache[currency] = rate
+        logger.warning(
+            "FX fallback: using persisted rate for %s (rate=%s).", currency, rate
+        )
+    return rate
+
+
+async def refresh_fx_rates(currencies: list[str], db: AsyncSession) -> None:
+    """Refresh the in-memory FX cache and persist rates to the DB.
 
     EUR is always set to 1.0.  For all other currencies the rate is
-    fetched from yfinance and stored in *_fx_cache*.
+    fetched from yfinance and, on success, persisted to ``finance.fx_rate``.
+    When a fetch fails (empty result or exception), the last persisted
+    rate is loaded from the DB into the cache as a fallback.
     """
     loop = asyncio.get_running_loop()
     _fx_cache["EUR"] = Decimal("1")
@@ -47,15 +103,28 @@ async def refresh_fx_rates(currencies: list[str]) -> None:
         cu = currency.upper()
         if cu == "EUR":
             continue
+        rate: Decimal | None = None
         try:
             rate = await loop.run_in_executor(None, partial(_fetch_rate_sync, cu))
-            if rate is not None:
-                _fx_cache[cu] = rate
-                logger.debug("FX rate updated: EUR/%s = %s", cu, rate)
-            else:
-                logger.warning("No FX rate returned for %s", cu)
         except Exception:
             logger.exception("Failed to fetch FX rate for %s", cu)
+
+        if rate is not None:
+            _fx_cache[cu] = rate
+            logger.debug("FX rate updated: EUR/%s = %s", cu, rate)
+            try:
+                await _persist_rate(db, cu, rate)
+            except Exception:
+                logger.exception("Failed to persist FX rate for %s", cu)
+        else:
+            logger.warning("No FX rate returned for %s, attempting DB fallback.", cu)
+            await _fallback_from_db(db, cu)
+
+    try:
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to commit FX rate updates.")
+        await db.rollback()
 
     logger.info("FX rates refreshed for %d currency/ies.", len(currencies))
 

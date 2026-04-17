@@ -28,7 +28,12 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     """
     import asyncio
 
-    from app.scheduler import create_scheduler, run_fx_rate_refresh, run_price_cache_refresh
+    from app.scheduler import (
+        create_scheduler,
+        run_fx_cache_warmup,
+        run_fx_rate_refresh,
+        run_price_cache_refresh,
+    )
 
     settings: Settings = application.state.settings
     logger.info("Starting up — env=%s", settings.app_env)
@@ -44,6 +49,13 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     scheduler = create_scheduler(settings, _sched_factory)
     scheduler.start()
     logger.info("Scheduler started (price cache: daily 07:00, monthly report: 1st 08:00).")
+
+    # Warm the FX cache from the DB synchronously so conversions work
+    # immediately — the yfinance refresh then runs in the background.
+    try:
+        await run_fx_cache_warmup(_sched_factory)
+    except Exception:
+        logger.exception("FX cache warm-up from DB failed.")
 
     # Run an initial cache warm-up in the background so it doesn't block startup.
     asyncio.create_task(run_price_cache_refresh(_sched_factory))

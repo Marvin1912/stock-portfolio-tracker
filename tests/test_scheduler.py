@@ -11,6 +11,7 @@ import pytest
 from app.config import Settings
 from app.scheduler import (
     create_scheduler,
+    run_fx_cache_warmup,
     run_fx_rate_refresh,
     run_monthly_report,
     run_price_cache_refresh,
@@ -132,6 +133,17 @@ async def test_run_fx_rate_refresh_calls_service_with_currencies() -> None:
         called_currencies = mock_refresh.call_args[0][0]
         assert "USD" in called_currencies
         assert "EUR" in called_currencies
+
+
+@pytest.mark.asyncio
+async def test_run_fx_cache_warmup_delegates_to_loader() -> None:
+    factory = _make_session_factory([])
+
+    with patch(
+        "app.scheduler.load_fx_cache_from_db", new_callable=AsyncMock
+    ) as mock_load:
+        await run_fx_cache_warmup(factory)
+        mock_load.assert_called_once()
 
 
 def test_fx_rate_job_scheduled_at_07_05() -> None:
