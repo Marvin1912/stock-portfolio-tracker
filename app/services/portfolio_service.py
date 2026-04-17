@@ -18,14 +18,34 @@ from app.services.fx_service import to_eur
 class PortfolioService:
     """Calculates current market values for portfolio holdings."""
 
+    async def _latest_close_prices(
+        self, db: AsyncSession, tickers: list[str]
+    ) -> dict[str, Decimal]:
+        """Return ``{ticker: latest close_price}`` from PriceCache."""
+        if not tickers:
+            return {}
+        stmt = (
+            select(PriceCache.ticker, PriceCache.close_price)
+            .distinct(PriceCache.ticker)
+            .where(PriceCache.ticker.in_(tickers))
+            .order_by(PriceCache.ticker, PriceCache.date.desc())
+        )
+        result = await db.execute(stmt)
+        return {ticker: price for ticker, price in result.all()}
+
     async def get_summary(self, db: AsyncSession) -> PortfolioSummary:
         """Return per-holding market values and total portfolio value.
 
-        Holdings without a ``current_price`` contribute ``None`` for their
-        value and are excluded from the ``total_value`` sum.
+        Uses the latest close price from ``PriceCache`` so the total stays
+        consistent with the performance chart.  Holdings without a cached
+        price contribute ``None`` for their value and are excluded from
+        the ``total_value`` sum.
         """
         rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
         holdings = rows.scalars().all()
+
+        tickers = [h.stock.ticker.upper() for h in holdings]
+        latest_prices = await self._latest_close_prices(db, tickers)
 
         items: list[HoldingSummaryItem] = []
         total_value: Decimal | None = None
@@ -33,8 +53,9 @@ class PortfolioService:
         for h in holdings:
             current_value: Decimal | None = None
             eur_price: Decimal | None = None
-            if h.stock.current_price is not None:
-                eur_price = to_eur(h.stock.current_price, h.stock.currency)
+            close_price = latest_prices.get(h.stock.ticker.upper())
+            if close_price is not None:
+                eur_price = to_eur(close_price, h.stock.currency)
                 current_value = h.quantity * eur_price
                 total_value = (total_value or Decimal("0")) + current_value
 
