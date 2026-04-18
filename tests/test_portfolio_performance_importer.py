@@ -204,6 +204,105 @@ async def test_import_xml_post_rejects_invalid_xml(client: AsyncClient) -> None:
     assert "Invalid XML" in response.text
 
 
+def test_parser_finds_transactions_nested_in_crossentry() -> None:
+    """BUY portfolio-transactions are serialised inside account crossEntry in real PP files."""
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<client>
+  <version>69</version>
+  <baseCurrency>EUR</baseCurrency>
+  <securities>
+    <security>
+      <uuid>sec-1</uuid>
+      <name>Commerzbank AG</name>
+      <currencyCode>EUR</currencyCode>
+      <tickerSymbol>CBK.DE</tickerSymbol>
+    </security>
+  </securities>
+  <accounts>
+    <account>
+      <uuid>acc-1</uuid>
+      <name>Cash</name>
+      <currencyCode>EUR</currencyCode>
+      <transactions>
+        <!-- First BUY account-transaction triggers inline portfolio serialisation -->
+        <account-transaction>
+          <uuid>acct-tx-1</uuid>
+          <date>2021-04-13T16:25</date>
+          <currencyCode>EUR</currencyCode>
+          <amount>244683</amount>
+          <security reference="../../../../../securities/security"/>
+          <shares>0</shares>
+          <crossEntry class="buysell">
+            <!-- Portfolio serialised INLINE here (first occurrence) -->
+            <portfolio>
+              <uuid>port-1</uuid>
+              <name>Comdirect</name>
+              <isRetired>false</isRetired>
+              <referenceAccount reference="../../../../.."/>
+              <transactions>
+                <!-- portfolio-transaction also serialised INLINE here -->
+                <portfolio-transaction>
+                  <uuid>port-tx-1</uuid>
+                  <date reference="../../../../../date"/>
+                  <currencyCode>EUR</currencyCode>
+                  <amount>244683</amount>
+                  <security reference="../../../../../../../../../securities/security"/>
+                  <shares>5000000</shares>
+                  <units>
+                    <unit type="FEE">
+                      <amount currency="EUR" amount="500"/>
+                    </unit>
+                  </units>
+                  <type>BUY</type>
+                </portfolio-transaction>
+              </transactions>
+            </portfolio>
+            <portfolioTransaction reference="../portfolio/transactions/portfolio-transaction"/>
+            <account reference="../../../../.."/>
+            <accountTransaction reference="../.."/>
+          </crossEntry>
+          <type>BUY</type>
+        </account-transaction>
+        <!-- DEPOSIT has no crossEntry — always at top level -->
+        <account-transaction>
+          <uuid>acct-tx-2</uuid>
+          <date>2021-01-01T00:00</date>
+          <currencyCode>EUR</currencyCode>
+          <amount>1000000000</amount>
+          <shares>0</shares>
+          <type>DEPOSIT</type>
+        </account-transaction>
+      </transactions>
+    </account>
+  </accounts>
+  <portfolios>
+    <!-- Portfolio already serialised above; only a back-reference here -->
+    <portfolio reference="../accounts/account/transactions/account-transaction/crossEntry/portfolio"/>
+  </portfolios>
+</client>"""
+
+    result = PortfolioPerformanceImporter().parse_bytes(xml.encode())
+
+    types = {t.type for t in result.transactions}
+    assert "BUY" in types, "BUY portfolio-transaction nested in crossEntry must be found"
+    assert "DEPOSIT" in types
+
+    buy_portfolio = next(t for t in result.transactions if t.type == "BUY" and t.kind == "portfolio")
+    assert buy_portfolio.shares == Decimal("5.000000")
+    assert buy_portfolio.fees == Decimal("0.000500")
+    assert buy_portfolio.security is not None
+    assert buy_portfolio.security.ticker == "CBK.DE"
+
+    # date was a reference — must be resolved to the account-transaction's date
+    from datetime import datetime
+    assert buy_portfolio.date == datetime(2021, 4, 13, 16, 25)
+
+    buy_account = next(t for t in result.transactions if t.type == "BUY" and t.kind == "account")
+    assert buy_account.uuid == "acct-tx-1"
+
+    assert result.total_count == 3  # port-tx-1 (BUY), acct-tx-1 (BUY), acct-tx-2 (DEPOSIT)
+
+
 @pytest.mark.asyncio
 async def test_import_xml_post_shows_preview(client: AsyncClient) -> None:
     response = await client.post(
