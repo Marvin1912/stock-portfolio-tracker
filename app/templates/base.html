@@ -96,6 +96,9 @@
       margin: 0 auto;
       padding: 2rem 1.5rem;
     }
+    .page--wide {
+      max-width: min(1400px, calc(100vw - 3rem));
+    }
 
     /* ── Tables ──────────────────────────────────────────────── */
     table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
@@ -255,6 +258,24 @@
     /* ── Import page ─────────────────────────────────────────── */
     div.actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
     .note { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
+
+    /* ── Filter bar (preview/list tables) ────────────────────── */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .filter-bar .filter-search { flex: 1 1 260px; min-width: 220px; }
+    .filter-bar .filter-type   { min-width: 180px; }
+    .filter-bar .filter-count  {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      margin-left: auto;
+    }
+    tr.is-hidden { display: none; }
 
     /* ── Step indicator ──────────────────────────────────────── */
     .step-indicator {
@@ -448,7 +469,7 @@
     <span class="nav-sep">/</span>
     <a href="/import/xml" class="nav-link">Import XML</a>
   </nav>
-  <main class="page">
+  <main class="{% block page_class %}page{% endblock %}">
     {% block content %}{% endblock %}
   </main>
   {% block extra_scripts %}{% endblock %}
