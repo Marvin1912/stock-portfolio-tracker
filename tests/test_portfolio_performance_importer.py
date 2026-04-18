@@ -64,16 +64,16 @@ SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
           <uuid>f73225c5-c9ee-4f3a-8b83-c1e883f2b437</uuid>
           <date>2021-08-02T00:00</date>
           <currencyCode>EUR</currencyCode>
-          <amount>10000</amount>
+          <amount>100000</amount>
           <security reference="../../../../../securities/security"/>
-          <shares>9000000</shares>
+          <shares>1000000000</shares>
           <note>Purchase via Sparplan</note>
           <units>
             <unit type="FEE">
-              <amount currency="EUR" amount="1000"/>
+              <amount currency="EUR" amount="100"/>
             </unit>
             <unit type="TAX">
-              <amount currency="EUR" amount="100"/>
+              <amount currency="EUR" amount="10"/>
             </unit>
           </units>
           <type>BUY</type>
@@ -82,9 +82,9 @@ SAMPLE_XML = """<?xml version="1.0" encoding="UTF-8"?>
           <uuid>abcdef01-0000-0000-0000-000000000001</uuid>
           <date>2022-03-10T00:00</date>
           <currencyCode>EUR</currencyCode>
-          <amount>5000000</amount>
+          <amount>150000</amount>
           <security reference="../../../../../securities/security[2]"/>
-          <shares>3000000</shares>
+          <shares>300000000</shares>
           <type>SELL</type>
         </portfolio-transaction>
       </transactions>
@@ -106,14 +106,14 @@ def test_parser_extracts_basic_metadata() -> None:
     assert len(result.securities) == 2
 
 
-def test_parser_decodes_millionth_values() -> None:
+def test_parser_decodes_pp_encoded_values() -> None:
     result = _parse()
 
     portfolio_tx = next(t for t in result.transactions if t.type == "BUY")
-    # shares: 9_000_000 / 1_000_000 = 9
-    assert portfolio_tx.shares == Decimal("9.000000")
-    # amount: 10_000 / 1_000_000 = 0.01
-    assert portfolio_tx.amount == Decimal("0.010000")
+    # shares: 1_000_000_000 / 100_000_000 = 10
+    assert portfolio_tx.shares == Decimal("10.00000000")
+    # amount: 100_000 / 100 = 1000.00
+    assert portfolio_tx.amount == Decimal("1000.00")
 
 
 def test_parser_resolves_security_references() -> None:
@@ -132,8 +132,8 @@ def test_parser_extracts_units_fees_and_taxes() -> None:
     result = _parse()
 
     buy = next(t for t in result.transactions if t.type == "BUY")
-    assert buy.fees == Decimal("0.001000")
-    assert buy.taxes == Decimal("0.000100")
+    assert buy.fees == Decimal("1.00")
+    assert buy.taxes == Decimal("0.10")
 
 
 def test_parser_includes_portfolio_and_account_transactions() -> None:
@@ -247,7 +247,7 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
                   <currencyCode>EUR</currencyCode>
                   <amount>244683</amount>
                   <security reference="../../../../../../../../../securities/security"/>
-                  <shares>5000000</shares>
+                  <shares>500000000</shares>
                   <units>
                     <unit type="FEE">
                       <amount currency="EUR" amount="500"/>
@@ -268,7 +268,7 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
           <uuid>acct-tx-2</uuid>
           <date>2021-01-01T00:00</date>
           <currencyCode>EUR</currencyCode>
-          <amount>1000000000</amount>
+          <amount>1000000</amount>
           <shares>0</shares>
           <type>DEPOSIT</type>
         </account-transaction>
@@ -291,8 +291,8 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
     buy_portfolio = next(
         t for t in result.transactions if t.type == "BUY" and t.kind == "portfolio"
     )
-    assert buy_portfolio.shares == Decimal("5.000000")
-    assert buy_portfolio.fees == Decimal("0.000500")
+    assert buy_portfolio.shares == Decimal("5.00000000")
+    assert buy_portfolio.fees == Decimal("5.00")
     assert buy_portfolio.security is not None
     assert buy_portfolio.security.ticker == "CBK.DE"
 
