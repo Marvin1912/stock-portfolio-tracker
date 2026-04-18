@@ -118,7 +118,8 @@ class ParseResult:
 # Parser implementation
 # ---------------------------------------------------------------------------
 
-_MILLIONTHS = Decimal(1_000_000)
+_AMOUNT_FACTOR = Decimal(100)           # PP stores monetary amounts as cents (precision=2)
+_SHARE_FACTOR = Decimal(100_000_000)    # PP stores share quantities with precision=8
 
 
 class PortfolioPerformanceImporter:
@@ -289,8 +290,8 @@ class PortfolioPerformanceImporter:
             )
             return None
 
-        amount = _decode_millionths(_text(tx_el.find("amount")))
-        shares = _decode_millionths(_text(tx_el.find("shares")))
+        amount = _decode_amount(_text(tx_el.find("amount")))
+        shares = _decode_shares(_text(tx_el.find("shares")))
         currency = _text(tx_el.find("currencyCode")) or ""
         note = _text(tx_el.find("note"))
 
@@ -325,7 +326,7 @@ class PortfolioPerformanceImporter:
             raw = amount_el.get("amount") or _text(amount_el) or "0"
             currency = amount_el.get("currency") or ""
             out.append(
-                Unit(type=utype, amount=_decode_millionths(raw), currency=currency)
+                Unit(type=utype, amount=_decode_amount(raw), currency=currency)
             )
         return out
 
@@ -372,12 +373,22 @@ def _text(element: ET.Element | None) -> str | None:
     return (element.text or "").strip() or None
 
 
-def _decode_millionths(raw: str | None) -> Decimal:
-    """Portfolio Performance stores numeric values as integers in millionths."""
+def _decode_amount(raw: str | None) -> Decimal:
+    """Portfolio Performance stores monetary amounts as long integers in cents (÷100)."""
     if not raw:
         return Decimal("0")
     try:
-        return (Decimal(raw) / _MILLIONTHS).quantize(Decimal("0.000001"))
+        return (Decimal(raw) / _AMOUNT_FACTOR).quantize(Decimal("0.01"))
+    except Exception:
+        return Decimal("0")
+
+
+def _decode_shares(raw: str | None) -> Decimal:
+    """Portfolio Performance stores share quantities as long integers with 8 decimal places (÷100_000_000)."""
+    if not raw:
+        return Decimal("0")
+    try:
+        return (Decimal(raw) / _SHARE_FACTOR).quantize(Decimal("0.00000001"))
     except Exception:
         return Decimal("0")
 
