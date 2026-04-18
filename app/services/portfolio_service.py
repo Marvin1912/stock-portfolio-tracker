@@ -54,7 +54,7 @@ class PortfolioService:
             current_value: Decimal | None = None
             eur_price: Decimal | None = None
             close_price = latest_prices.get(h.stock.ticker.upper())
-            if close_price is not None:
+            if close_price is not None and close_price.is_finite():
                 eur_price = to_eur(close_price, h.stock.currency)
                 current_value = h.quantity * eur_price
                 total_value = (total_value or Decimal("0")) + current_value
@@ -103,7 +103,8 @@ class PortfolioService:
 
         prices_by_date: dict[datetime.date, dict[str, Decimal]] = {}
         for ticker, date, close_price in price_rows:
-            prices_by_date.setdefault(date, {})[ticker] = close_price
+            if close_price.is_finite():
+                prices_by_date.setdefault(date, {})[ticker] = close_price
 
         all_tickers = set(tickers)
         performance: list[tuple[datetime.date, Decimal]] = []
