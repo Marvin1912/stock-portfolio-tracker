@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import zipfile
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
