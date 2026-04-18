@@ -161,13 +161,7 @@ class PortfolioPerformanceImporter:
         securities = self._collect_securities(root)
         warnings: list[str] = []
 
-        transactions: list[ParsedTransaction] = []
-        transactions.extend(
-            self._extract_portfolio_transactions(root, securities, warnings)
-        )
-        transactions.extend(
-            self._extract_account_transactions(root, securities, warnings)
-        )
+        transactions = self._extract_all_transactions(root, securities, warnings)
         transactions.sort(key=lambda t: t.date)
 
         return ParseResult(
@@ -200,62 +194,65 @@ class PortfolioPerformanceImporter:
 
     # -- transaction extraction ----------------------------------------
 
-    def _extract_portfolio_transactions(
+    def _extract_all_transactions(
         self,
         root: ET.Element,
         securities: dict[str, SecurityInfo],
         warnings: list[str],
     ) -> list[ParsedTransaction]:
-        out: list[ParsedTransaction] = []
-        portfolios = root.find("portfolios")
-        if portfolios is None:
-            return out
+        """Recursively find every transaction element in the document.
 
-        for p_idx, portfolio in enumerate(portfolios.findall("portfolio"), start=1):
-            transactions_el = portfolio.find("transactions")
-            if transactions_el is None:
-                continue
-            for t_idx, tx_el in enumerate(
-                transactions_el.findall("portfolio-transaction"), start=1
-            ):
-                path = _build_path(
-                    ["portfolios", f"portfolio[{p_idx}]", "transactions",
-                     f"portfolio-transaction[{t_idx}]"]
+        Portfolio Performance serialises accounts before portfolios in the XML.
+        The first BUY/SELL account-transaction triggers inline serialisation of
+        the entire linked Portfolio (with all its portfolio-transactions) inside
+        the <crossEntry> element.  Subsequent references to those objects are
+        written as <... reference="..."/> stubs with no content.
+
+        Walking just `portfolios/portfolio/transactions` therefore misses every
+        BUY/SELL portfolio-transaction.  Instead we iterate the full element
+        tree and skip back-reference stubs (elements that carry a ``reference``
+        attribute but no UUID child).
+        """
+        # Build parent map once so we can reconstruct each element's XPath.
+        parent_map: dict[ET.Element, ET.Element] = {
+            child: parent for parent in root.iter() for child in parent
+        }
+
+        def compute_path(element: ET.Element) -> list[str]:
+            segments: list[str] = []
+            current = element
+            while current in parent_map:
+                p = parent_map[current]
+                same_tag = [c for c in p if c.tag == current.tag]
+                idx = same_tag.index(current) + 1
+                segments.append(
+                    f"{current.tag}[{idx}]" if len(same_tag) > 1 else current.tag
                 )
+                current = p
+            segments.append(root.tag)
+            return list(reversed(segments))
+
+        out: list[ParsedTransaction] = []
+        seen: set[str] = set()
+
+        for tag, kind in (
+            ("portfolio-transaction", "portfolio"),
+            ("account-transaction", "account"),
+        ):
+            for tx_el in root.iter(tag):
+                if tx_el.get("reference"):
+                    continue  # back-reference stub — actual data is elsewhere
+                uuid = _text(tx_el.find("uuid")) or ""
+                if uuid in seen:
+                    continue
+                seen.add(uuid)
+                path = compute_path(tx_el)
                 parsed = self._parse_transaction(
-                    tx_el, root, path, "portfolio", securities, warnings
+                    tx_el, root, path, kind, securities, warnings  # type: ignore[arg-type]
                 )
                 if parsed:
                     out.append(parsed)
-        return out
 
-    def _extract_account_transactions(
-        self,
-        root: ET.Element,
-        securities: dict[str, SecurityInfo],
-        warnings: list[str],
-    ) -> list[ParsedTransaction]:
-        out: list[ParsedTransaction] = []
-        accounts = root.find("accounts")
-        if accounts is None:
-            return out
-
-        for a_idx, account in enumerate(accounts.findall("account"), start=1):
-            transactions_el = account.find("transactions")
-            if transactions_el is None:
-                continue
-            for t_idx, tx_el in enumerate(
-                transactions_el.findall("account-transaction"), start=1
-            ):
-                path = _build_path(
-                    ["accounts", f"account[{a_idx}]", "transactions",
-                     f"account-transaction[{t_idx}]"]
-                )
-                parsed = self._parse_transaction(
-                    tx_el, root, path, "account", securities, warnings
-                )
-                if parsed:
-                    out.append(parsed)
         return out
 
     def _parse_transaction(
@@ -268,8 +265,17 @@ class PortfolioPerformanceImporter:
         warnings: list[str],
     ) -> ParsedTransaction | None:
         uuid = _text(tx_el.find("uuid")) or ""
-        date_str = _text(tx_el.find("date"))
         tx_type = _text(tx_el.find("type")) or "UNKNOWN"
+
+        date_el = tx_el.find("date")
+        date_ref = date_el.get("reference") if date_el is not None else None
+        if date_ref:
+            # XStream may serialise a shared LocalDateTime object by reference
+            # (e.g. portfolio-transaction sharing its paired account-transaction's date).
+            ref_target = _resolve_reference(root, [*tx_path, "date"], date_ref)
+            date_str = _text(ref_target) if ref_target is not None else None
+        else:
+            date_str = _text(date_el)
 
         if not date_str:
             warnings.append(f"Skipped transaction {uuid or '?'} — missing date.")
@@ -375,10 +381,6 @@ def _decode_millionths(raw: str | None) -> Decimal:
     except Exception:
         return Decimal("0")
 
-
-def _build_path(segments: list[str]) -> list[str]:
-    """Return the XPath-style segments that identify an element's location."""
-    return ["client", *segments]
 
 
 def _resolve_reference(
