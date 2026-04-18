@@ -384,7 +384,7 @@ def _decode_amount(raw: str | None) -> Decimal:
 
 
 def _decode_shares(raw: str | None) -> Decimal:
-    """Portfolio Performance stores share quantities as long integers with 8 decimal places (÷100_000_000)."""
+    """Portfolio Performance stores share quantities as long integers with 8 decimal places (÷100_000_000)."""  # noqa: E501
     if not raw:
         return Decimal("0")
     try:
