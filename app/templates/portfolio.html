@@ -69,6 +69,11 @@
     margin-bottom: 1.25rem;
   }
 
+  /* Refresh button loading state swap */
+  .htmx-indicator-show { display: none; }
+  .htmx-request .htmx-indicator-hide { display: none; }
+  .htmx-request .htmx-indicator-show { display: inline; }
+
   /* ── Form slot slide-down ────────────────────────────────────── */
   #add-form-slot {
     overflow: hidden;
@@ -232,6 +237,15 @@
 
   <!-- Action bar -->
   <div class="action-bar">
+    <button
+      class="btn-ghost"
+      hx-post="/admin/refresh-prices"
+      hx-swap="none"
+      hx-disabled-elt="this"
+      title="Fetch latest prices and FX rates now">
+      <span class="htmx-indicator-hide">&#x21bb; Refresh Prices</span>
+      <span class="htmx-indicator-show">Refreshing…</span>
+    </button>
     <button
       class="btn-primary"
       hx-get="/htmx/holdings/add-form"
