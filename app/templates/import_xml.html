@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Import Portfolio Performance XML{% endblock %}
+
+{% block content %}
+  <p style="margin-bottom: 0.75rem;"><a href="/">&larr; Back to portfolio</a></p>
+  <h1>Import Portfolio Performance XML</h1>
+
+  <div class="step-indicator">
+    <span class="step-item {{ 'active' if step == 'upload' else 'completed' }}">
+      <span class="step-num">1</span> Upload
+    </span>
+    <span class="step-arrow">&rarr;</span>
+    <span class="step-item {{ 'active' if step == 'preview' else '' }}">
+      <span class="step-num">2</span> Preview
+    </span>
+  </div>
+
+  {% if step == "upload" %}
+  <div class="card">
+    <h2>Upload Portfolio Performance file</h2>
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    <p class="note">
+      Upload a Portfolio Performance XML export (<code>.xml</code>) or a zip
+      archive containing one. The preview will show all detected transactions
+      without modifying your portfolio.
+    </p>
+    <form method="post" action="/import/xml" enctype="multipart/form-data">
+      <div class="drop-zone" id="drop-zone">
+        <svg class="drop-zone-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <polyline points="9 15 12 12 15 15"/>
+        </svg>
+        <p class="drop-zone-text">Drag &amp; drop your XML or zip here or <strong>click to browse</strong></p>
+        <span class="file-badge">.XML / .ZIP</span>
+        <input type="file" id="file" name="file" accept=".xml,.zip" required>
+        <p class="selected-file" id="selected-file"></p>
+      </div>
+      <button type="submit" class="btn-primary">Upload &amp; Preview</button>
+    </form>
+  </div>
+
+  {% elif step == "preview" %}
+  <div class="summary-card anim-fade-slide-down">
+    <h2>File summary</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <span class="summary-label">File</span>
+        <span class="summary-value" style="font-size: 0.9rem; word-break: break-all;">{{ filename or "—" }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Version</span>
+        <span class="summary-value">{{ result.version or "—" }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Base currency</span>
+        <span class="summary-value">{{ result.base_currency or "—" }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Securities</span>
+        <span class="summary-value">{{ result.unique_securities | length }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Transactions</span>
+        <span class="summary-value">{{ result.total_count }}</span>
+      </div>
+      {% if result.date_range %}
+      <div class="summary-item">
+        <span class="summary-label">Date range</span>
+        <span class="summary-value" style="font-size: 0.9rem;">
+          {{ result.date_range[0].strftime("%Y-%m-%d") }} &rarr; {{ result.date_range[1].strftime("%Y-%m-%d") }}
+        </span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if result.type_breakdown %}
+    <div style="margin-top: 1.25rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+      {% for bucket in result.type_breakdown %}
+      <span class="file-badge">{{ bucket.type }} &middot; {{ bucket.count }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if result.warnings %}
+  <div class="card anim-fade-slide-down" style="border-color: var(--danger);">
+    <h2 style="color: var(--danger);">Warnings</h2>
+    <ul style="margin-left: 1.2rem; color: var(--muted); font-size: 0.85rem;">
+      {% for w in result.warnings %}
+      <li>{{ w }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="card anim-fade-slide-up">
+    <h2>Transactions ({{ result.total_count }})</h2>
+    {% if result.transactions %}
+    <div style="overflow-x: auto;">
+      <table class="table-striped">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Security</th>
+            <th class="number">Shares</th>
+            <th class="number">Amount</th>
+            <th>Currency</th>
+            <th class="number">Fees</th>
+            <th class="number">Taxes</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in result.transactions %}
+          <tr>
+            <td class="text-mono">{{ tx.date.strftime("%Y-%m-%d") }}</td>
+            <td class="text-mono">{{ tx.type }}</td>
+            <td>{{ tx.security.display if tx.security else "—" }}</td>
+            <td class="number">{{ "%.4f"|format(tx.shares) if tx.shares else "—" }}</td>
+            <td class="number">{{ "%.2f"|format(tx.amount) }}</td>
+            <td class="text-mono">{{ tx.currency }}</td>
+            <td class="number">{% if tx.fees %}{{ "%.2f"|format(tx.fees) }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td class="number">{% if tx.taxes %}{{ "%.2f"|format(tx.taxes) }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td style="color: var(--muted); font-size: 0.85rem;">{{ tx.note or "" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="note">No transactions were found in the uploaded file.</p>
+    {% endif %}
+
+    <div class="actions" style="margin-top: 1.25rem;">
+      <a href="/import/xml"><button type="button" class="btn-ghost">Upload another file</button></a>
+      <a href="/"><button type="button" class="btn-primary">Back to portfolio</button></a>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    var zone = document.getElementById("drop-zone");
+    if (!zone) return;
+    var input = zone.querySelector('input[type="file"]');
+    var label = document.getElementById("selected-file");
+
+    zone.addEventListener("dragover", function (e) { e.preventDefault(); zone.classList.add("dragover"); });
+    zone.addEventListener("dragleave", function () { zone.classList.remove("dragover"); });
+    zone.addEventListener("drop", function (e) {
+      e.preventDefault();
+      zone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) {
+        input.files = e.dataTransfer.files;
+        label.textContent = e.dataTransfer.files[0].name;
+      }
+    });
+    input.addEventListener("change", function () {
+      label.textContent = input.files.length ? input.files[0].name : "";
+    });
+  })();
+</script>
+{% endblock %}
