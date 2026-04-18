@@ -2,6 +2,8 @@
 
 {% block title %}Import Portfolio Performance XML{% endblock %}
 
+{% block page_class %}page{% if step == "preview" %} page--wide{% endif %}{% endblock %}
+
 {% block content %}
   <p style="margin-bottom: 0.75rem;"><a href="/">&larr; Back to portfolio</a></p>
   <h1>Import Portfolio Performance XML</h1>
@@ -101,8 +103,24 @@
   <div class="card anim-fade-slide-up">
     <h2>Transactions ({{ result.total_count }})</h2>
     {% if result.transactions %}
+    <div class="filter-bar">
+      <input
+        type="search"
+        class="filter-search"
+        id="tx-search"
+        placeholder="Search date, security, currency, note…"
+        autocomplete="off">
+      <select class="filter-type" id="tx-type-filter">
+        <option value="">All types</option>
+        {% for bucket in result.type_breakdown %}
+        <option value="{{ bucket.type }}">{{ bucket.type }} ({{ bucket.count }})</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="btn-ghost" id="tx-filter-reset">Reset</button>
+      <span class="filter-count" id="tx-filter-count">{{ result.transactions | length }} of {{ result.transactions | length }}</span>
+    </div>
     <div style="overflow-x: auto;">
-      <table class="table-striped">
+      <table class="table-striped" id="tx-table">
         <thead>
           <tr>
             <th>Date</th>
@@ -118,7 +136,8 @@
         </thead>
         <tbody>
           {% for tx in result.transactions %}
-          <tr>
+          {% set search_blob %}{{ tx.date.strftime("%Y-%m-%d") }} {{ tx.type }} {{ tx.security.display if tx.security else "" }} {{ tx.currency }} {{ tx.note or "" }}{% endset %}
+          <tr data-type="{{ tx.type }}" data-search="{{ search_blob | lower }}">
             <td class="text-mono">{{ tx.date.strftime("%Y-%m-%d") }}</td>
             <td class="text-mono">{{ tx.type }}</td>
             <td>{{ tx.security.display if tx.security else "—" }}</td>
@@ -165,6 +184,40 @@
     });
     input.addEventListener("change", function () {
       label.textContent = input.files.length ? input.files[0].name : "";
+    });
+  })();
+
+  (function () {
+    var search = document.getElementById("tx-search");
+    if (!search) return;
+    var typeSel = document.getElementById("tx-type-filter");
+    var resetBtn = document.getElementById("tx-filter-reset");
+    var countEl = document.getElementById("tx-filter-count");
+    var rows = Array.prototype.slice.call(
+      document.querySelectorAll("#tx-table tbody tr")
+    );
+    var total = rows.length;
+
+    function apply() {
+      var q = search.value.trim().toLowerCase();
+      var t = typeSel.value;
+      var shown = 0;
+      rows.forEach(function (row) {
+        var matchType = !t || row.getAttribute("data-type") === t;
+        var matchText = !q || row.getAttribute("data-search").indexOf(q) !== -1;
+        var visible = matchType && matchText;
+        row.classList.toggle("is-hidden", !visible);
+        if (visible) shown++;
+      });
+      countEl.textContent = shown + " of " + total;
+    }
+
+    search.addEventListener("input", apply);
+    typeSel.addEventListener("change", apply);
+    resetBtn.addEventListener("click", function () {
+      search.value = "";
+      typeSel.value = "";
+      apply();
     });
   })();
 </script>
