@@ -277,7 +277,8 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
   </accounts>
   <portfolios>
     <!-- Portfolio already serialised above; only a back-reference here -->
-    <portfolio reference="../accounts/account/transactions/account-transaction/crossEntry/portfolio"/>
+    <portfolio
+      reference="../accounts/account/transactions/account-transaction/crossEntry/portfolio"/>
   </portfolios>
 </client>"""
 
@@ -287,7 +288,9 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
     assert "BUY" in types, "BUY portfolio-transaction nested in crossEntry must be found"
     assert "DEPOSIT" in types
 
-    buy_portfolio = next(t for t in result.transactions if t.type == "BUY" and t.kind == "portfolio")
+    buy_portfolio = next(
+        t for t in result.transactions if t.type == "BUY" and t.kind == "portfolio"
+    )
     assert buy_portfolio.shares == Decimal("5.000000")
     assert buy_portfolio.fees == Decimal("0.000500")
     assert buy_portfolio.security is not None
