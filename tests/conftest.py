@@ -1,58 +1,69 @@
 """Shared pytest fixtures for the test suite.
 
-The fixtures here create an in-process FastAPI test client backed by a
-real (but test-scoped) database session.  When TEST_DATABASE_URL is not set
-in the test environment, the tests that require a database are skipped
-automatically.
+All tests run against a mocked database session — no real PostgreSQL is
+required.  The FastAPI lifespan (which normally initialises the DB engine
+and APScheduler) is bypassed: ``ASGITransport`` does not fire lifespan
+events, and the ``get_async_session`` dependency is overridden with a
+``MagicMock`` that exposes the async methods real handlers call.
 """
 
 from __future__ import annotations
 
-import os
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 from app.config import Settings
+from app.database import get_async_session
 from app.main import create_app
 
-_DB_URL = os.environ.get("TEST_DATABASE_URL")
 
-
-@pytest.fixture(scope="session")
-def test_settings() -> Settings:
-    """Return a Settings instance suitable for testing.
-
-    Override TEST_DATABASE_URL via environment variable in CI to point
-    at a real test database.
-    """
+def _make_test_settings() -> Settings:
     return Settings(
         app_env="development",
-        app_debug=True,
+        app_debug=False,
         secret_key="test-secret-key-that-is-long-enough-32chars",
-        database_url=_DB_URL or "postgresql+asyncpg://postgres:postgres@localhost:5432/portfolio_test",
+        database_url="postgresql+asyncpg://mock/mock",
     )
 
 
-@pytest_asyncio.fixture(scope="session")
-async def client(test_settings: Settings) -> AsyncGenerator[AsyncClient, None]:
-    """Yield an AsyncClient wired to the test FastAPI application.
-
-    The app's lifespan (database init/close) is executed automatically
-    via LifespanManager.
-    """
-    application = create_app(settings=test_settings)
-    async with LifespanManager(application):
-        transport = ASGITransport(app=application)  # type: ignore[arg-type]
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            yield ac
+def make_mock_session() -> MagicMock:
+    """Return a MagicMock shaped like an ``AsyncSession`` with no-op async methods."""
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.get = AsyncMock()
+    session.add = MagicMock()
+    session.delete = AsyncMock()
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    return session
 
 
 @pytest.fixture
-def require_db(request: pytest.FixtureRequest) -> None:
-    """Skip the test automatically when TEST_DATABASE_URL is not configured."""
-    if not _DB_URL:
-        pytest.skip("TEST_DATABASE_URL not set — skipping database-dependent test")
+def mock_session() -> MagicMock:
+    """A fresh mocked ``AsyncSession`` — customise per-test as needed."""
+    return make_mock_session()
+
+
+@pytest_asyncio.fixture
+async def client(mock_session: MagicMock) -> AsyncIterator[AsyncClient]:
+    """An ``AsyncClient`` against a FastAPI app backed by ``mock_session``.
+
+    The app's lifespan is intentionally not triggered (ASGITransport skips
+    lifespan events), so no real database engine or scheduler is created.
+    """
+    app = create_app(settings=_make_test_settings())
+
+    async def _override() -> MagicMock:
+        return mock_session
+
+    app.dependency_overrides[get_async_session] = _override
+
+    transport = ASGITransport(app=app)  # type: ignore[arg-type]
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
