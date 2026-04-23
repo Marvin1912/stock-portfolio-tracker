@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from app.models.holding import Holding
 
 
+ASSET_TYPE_STOCK = "STOCK"
+ASSET_TYPE_CRYPTO = "CRYPTO"
+
+
 class Stock(Base):
     """Represents a tradeable stock/security."""
 
@@ -27,6 +31,9 @@ class Stock(Base):
     ticker: Mapped[str] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), nullable=False)
+    asset_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=ASSET_TYPE_STOCK
+    )
     current_price: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=18, scale=4), nullable=True
     )

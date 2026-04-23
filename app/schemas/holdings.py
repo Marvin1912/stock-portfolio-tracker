@@ -32,6 +32,7 @@ class HoldingSummaryItem(BaseModel):
     id: int
     ticker: str
     name: str
+    asset_type: str
     quantity: Decimal
     current_price: Decimal | None
     current_value: Decimal | None

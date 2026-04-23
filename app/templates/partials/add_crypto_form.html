@@ -1,0 +1,61 @@
+<div id="add-crypto-form" class="add-form-container">
+  <h2>Add Crypto</h2>
+  <form
+    hx-post="/htmx/crypto-holdings"
+    hx-target="#add-form-slot"
+    hx-swap="innerHTML">
+    {% if error %}
+    <div class="form-error">{{ error }}</div>
+    {% endif %}
+    <div class="form-row">
+      <label for="crypto-symbol">Symbol</label>
+      <div class="input-group">
+        <input
+          type="text"
+          id="crypto-symbol"
+          name="symbol"
+          value="{{ symbol or '' }}"
+          placeholder="e.g. BTC"
+          autocomplete="off"
+          class="input-mono input-glow"
+          hx-get="/htmx/validate-crypto"
+          hx-trigger="input changed delay:600ms, change from:#crypto-quote"
+          hx-include="[name='symbol'],[name='quote']"
+          hx-target="#crypto-hint"
+          hx-swap="innerHTML">
+        <span id="crypto-hint"></span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="crypto-quote">Quote</label>
+      <select
+        id="crypto-quote"
+        name="quote"
+        class="input-mono input-glow">
+        {% for q in supported_quotes %}
+        <option value="{{ q }}" {% if quote == q %}selected{% endif %}>{{ q }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="crypto-quantity">Quantity</label>
+      <input
+        type="number"
+        id="crypto-quantity"
+        name="quantity"
+        value="{{ quantity or '' }}"
+        min="0.00000001"
+        step="any"
+        placeholder="e.g. 0.05"
+        required
+        class="input-mono input-glow">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Add</button>
+      <button
+        type="button"
+        onclick="var s=document.getElementById('add-form-slot'); s.classList.remove('open'); setTimeout(function(){s.innerHTML='';},300)"
+        class="btn-ghost">Cancel</button>
+    </div>
+  </form>
+</div>

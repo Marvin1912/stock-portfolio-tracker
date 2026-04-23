@@ -64,6 +64,7 @@ class PortfolioService:
                     id=h.id,
                     ticker=h.stock.ticker,
                     name=h.stock.name,
+                    asset_type=h.stock.asset_type,
                     quantity=h.quantity,
                     current_price=eur_price,
                     current_value=current_value,

@@ -15,10 +15,16 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.database import get_async_session
 from app.models.holding import Holding
-from app.models.stock import Stock
+from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK, Stock
 from app.services.fx_service import to_eur
 from app.services.openfigi_lookup import resolve_wkn
 from app.services.stock_lookup import fetch_stock_info
+
+_SUPPORTED_QUOTES = ("EUR", "USD")
+
+
+def _build_crypto_ticker(symbol: str, quote: str) -> str:
+    return f"{symbol.strip().upper()}-{quote.strip().upper()}"
 
 router = APIRouter(prefix="/htmx", tags=["htmx"])
 
@@ -153,7 +159,28 @@ async def htmx_create_holding(
             },
         )
 
-    # Resolve or create the stock
+    return await _create_or_attach_holding(
+        request=request,
+        db=db,
+        ticker=ticker,
+        qty=qty,
+        asset_type=ASSET_TYPE_STOCK,
+        not_found_form="partials/add_holding_form.html",
+        not_found_context={"ticker": ticker, "quantity": quantity},
+    )
+
+
+async def _create_or_attach_holding(
+    *,
+    request: Request,
+    db: AsyncSession,
+    ticker: str,
+    qty: Decimal,
+    asset_type: str,
+    not_found_form: str,
+    not_found_context: dict[str, object],
+) -> HTMLResponse:
+    """Find or create a Stock, attach a Holding, and return the OOB row HTML."""
     result = await db.execute(select(Stock).where(Stock.ticker == ticker))
     stock = result.scalar_one_or_none()
 
@@ -162,13 +189,14 @@ async def htmx_create_holding(
         if info is None:
             return _render(
                 request,
-                "partials/add_holding_form.html",
-                {"error": f"Ticker '{ticker}' not found.", "ticker": ticker, "quantity": quantity},
+                not_found_form,
+                {"error": f"Ticker '{ticker}' not found.", **not_found_context},
             )
         stock = Stock(
             ticker=info.ticker,
             name=info.name,
             currency=info.currency,
+            asset_type=asset_type,
             current_price=info.current_price,
         )
         db.add(stock)
@@ -192,13 +220,13 @@ async def htmx_create_holding(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
+                "asset_type": stock.asset_type,
                 "quantity": qty,
                 "current_value": current_value,
             }
         },
     )
     row_html = bytes(row_resp.body).decode()
-    # OOB swap: append row to tbody with flash animation, clear form slot
     oob_attr = 'class="anim-flash" hx-swap-oob="beforeend:#holdings-tbody"'
     oob_html = (
         row_html.replace(
@@ -242,6 +270,7 @@ async def holding_row(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
+                "asset_type": stock.asset_type,
                 "quantity": holding.quantity,
                 "current_value": current_value,
             }
@@ -332,9 +361,121 @@ async def htmx_update_holding(
                 "id": holding.id,
                 "ticker": stock.ticker,
                 "name": stock.name,
+                "asset_type": stock.asset_type,
                 "quantity": qty,
                 "current_value": current_value,
             }
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Add crypto holding
+# ---------------------------------------------------------------------------
+
+
+@router.get("/validate-crypto", response_class=HTMLResponse)
+async def validate_crypto(
+    request: Request,
+    symbol: str = "",
+    quote: str = "EUR",
+    db: AsyncSession = _DB,
+) -> HTMLResponse:
+    """Return an inline validation hint for the crypto symbol field."""
+    symbol = symbol.strip().upper()
+    quote = quote.strip().upper() or "EUR"
+    if not symbol:
+        return HTMLResponse("")
+    if quote not in _SUPPORTED_QUOTES:
+        return _render(request, "partials/ticker_hint.html", {"valid": False, "name": None})
+
+    ticker = _build_crypto_ticker(symbol, quote)
+
+    result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+    stock = result.scalar_one_or_none()
+    if stock:
+        return _render(request, "partials/ticker_hint.html", {"valid": True, "name": stock.name})
+
+    info = await fetch_stock_info(ticker)
+    if info:
+        return _render(request, "partials/ticker_hint.html", {"valid": True, "name": info.name})
+
+    return _render(request, "partials/ticker_hint.html", {"valid": False, "name": None})
+
+
+@router.get("/holdings/add-crypto-form", response_class=HTMLResponse)
+async def add_crypto_form(request: Request) -> HTMLResponse:
+    return _render(
+        request,
+        "partials/add_crypto_form.html",
+        {"supported_quotes": _SUPPORTED_QUOTES},
+    )
+
+
+@router.post("/crypto-holdings", response_class=HTMLResponse)
+async def htmx_create_crypto_holding(
+    request: Request,
+    symbol: str = Form(""),
+    quote: str = Form("EUR"),
+    quantity: str = Form(...),
+    db: AsyncSession = _DB,
+) -> HTMLResponse:
+    symbol = symbol.strip().upper()
+    quote = quote.strip().upper() or "EUR"
+
+    if not symbol:
+        return _render(
+            request,
+            "partials/add_crypto_form.html",
+            {
+                "error": "Please provide a crypto symbol (e.g. BTC).",
+                "quote": quote,
+                "quantity": quantity,
+                "supported_quotes": _SUPPORTED_QUOTES,
+            },
+        )
+    if quote not in _SUPPORTED_QUOTES:
+        return _render(
+            request,
+            "partials/add_crypto_form.html",
+            {
+                "error": f"Quote currency must be one of: {', '.join(_SUPPORTED_QUOTES)}.",
+                "symbol": symbol,
+                "quantity": quantity,
+                "supported_quotes": _SUPPORTED_QUOTES,
+            },
+        )
+
+    try:
+        qty = Decimal(quantity)
+        if qty <= 0:
+            raise ValueError
+    except (ValueError, Exception):
+        return _render(
+            request,
+            "partials/add_crypto_form.html",
+            {
+                "error": "Quantity must be a positive number.",
+                "symbol": symbol,
+                "quote": quote,
+                "quantity": quantity,
+                "supported_quotes": _SUPPORTED_QUOTES,
+            },
+        )
+
+    ticker = _build_crypto_ticker(symbol, quote)
+    return await _create_or_attach_holding(
+        request=request,
+        db=db,
+        ticker=ticker,
+        qty=qty,
+        asset_type=ASSET_TYPE_CRYPTO,
+        not_found_form="partials/add_crypto_form.html",
+        not_found_context={
+            "symbol": symbol,
+            "quote": quote,
+            "quantity": quantity,
+            "supported_quotes": _SUPPORTED_QUOTES,
         },
     )
 
