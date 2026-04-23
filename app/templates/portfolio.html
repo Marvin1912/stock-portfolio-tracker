@@ -157,6 +157,23 @@
     font-weight: 400;
     margin-top: 0.1rem;
   }
+  .asset-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+  .asset-badge-crypto {
+    background: rgba(247, 147, 26, 0.12);
+    color: #f7931a;
+    border: 1px solid rgba(247, 147, 26, 0.35);
+  }
   .holdings-table tfoot .total-row td {
     border-top: 2px solid var(--border);
     border-bottom: none;
@@ -254,6 +271,14 @@
       hx-on::after-swap="document.getElementById('add-form-slot').classList.add('open')">
       + Add Holding
     </button>
+    <button
+      class="btn-primary"
+      hx-get="/htmx/holdings/add-crypto-form"
+      hx-target="#add-form-slot"
+      hx-swap="innerHTML"
+      hx-on::after-swap="document.getElementById('add-form-slot').classList.add('open')">
+      + Add Crypto
+    </button>
     <a href="/import/pdf"><button class="btn-ghost">&#8593; Import PDF</button></a>
   </div>
 
@@ -290,6 +315,9 @@
         <td>
           <a href="/stocks/{{ row.ticker }}" style="text-decoration: none;">
             <span class="holding-ticker">{{ row.ticker }}</span>
+            {% if row.asset_type == "CRYPTO" %}
+            <span class="asset-badge asset-badge-crypto">Crypto</span>
+            {% endif %}
             <span class="holding-name">{{ row.name }}</span>
           </a>
         </td>

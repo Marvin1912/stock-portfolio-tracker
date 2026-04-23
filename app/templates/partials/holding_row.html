@@ -2,6 +2,9 @@
   <td>
     <a href="/stocks/{{ holding.ticker }}" style="text-decoration: none;">
       <span class="holding-ticker">{{ holding.ticker }}</span>
+      {% if holding.asset_type == "CRYPTO" %}
+      <span class="asset-badge asset-badge-crypto">Crypto</span>
+      {% endif %}
       <span class="holding-name">{{ holding.name }}</span>
     </a>
   </td>

@@ -17,11 +17,13 @@ def _make_holding(
     name: str,
     quantity: str,
     currency: str = "EUR",
+    asset_type: str = "STOCK",
 ) -> MagicMock:
     stock = MagicMock()
     stock.ticker = ticker
     stock.name = name
     stock.currency = currency
+    stock.asset_type = asset_type
 
     holding = MagicMock()
     holding.id = id
@@ -106,6 +108,24 @@ async def test_summary_mixed_holdings() -> None:
     assert len(summary.holdings) == 3
     assert summary.total_value == Decimal("2100.00")  # 10*150 + 2*300
     assert summary.holdings[1].current_value is None
+
+
+@pytest.mark.asyncio
+async def test_summary_preserves_asset_type() -> None:
+    """Each summary item carries the underlying stock's ``asset_type``."""
+    db = _make_db(
+        [
+            _make_holding(1, "AAPL", "Apple Inc.", "10", asset_type="STOCK"),
+            _make_holding(2, "BTC-EUR", "Bitcoin EUR", "0.5", asset_type="CRYPTO"),
+        ],
+        {"AAPL": "150.00", "BTC-EUR": "60000.00"},
+    )
+
+    summary = await PortfolioService().get_summary(db)
+
+    by_ticker = {item.ticker: item for item in summary.holdings}
+    assert by_ticker["AAPL"].asset_type == "STOCK"
+    assert by_ticker["BTC-EUR"].asset_type == "CRYPTO"
 
 
 @pytest.mark.asyncio
