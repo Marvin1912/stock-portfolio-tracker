@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import calendar
 import datetime
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
 
 from jinja2 import Environment, PackageLoader, select_autoescape
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -50,6 +51,27 @@ class MonthlyReportData:
 class ReportService:
     """Generates the monthly portfolio wealth report."""
 
+    async def get_available_months(
+        self, db: AsyncSession
+    ) -> list[tuple[int, int]]:
+        """Return distinct (year, month) tuples that have price data, newest first.
+
+        Only completed months (strictly before the current calendar month) are
+        returned.
+        """
+        current_month_start = datetime.date.today().replace(day=1)
+        subq = (
+            select(func.date_trunc("month", PriceCache.date).label("month_start"))
+            .where(PriceCache.date < current_month_start)
+            .distinct()
+            .subquery()
+        )
+        result = await db.execute(
+            select(subq.c.month_start).order_by(subq.c.month_start.desc())
+        )
+        rows = result.scalars().all()
+        return [(row.year, row.month) for row in rows]
+
     async def generate_monthly_report(
         self, db: AsyncSession, reference_date: datetime.date | None = None
     ) -> MonthlyReportData | None:
@@ -66,7 +88,27 @@ class ReportService:
         today = reference_date or datetime.date.today()
         period_end = today.replace(day=1) - datetime.timedelta(days=1)
         period_start = period_end.replace(day=1)
+        return await self._build_report(db, period_start, period_end)
 
+    async def generate_report_for_month(
+        self, db: AsyncSession, year: int, month: int
+    ) -> MonthlyReportData | None:
+        """Build the monthly report for an explicit calendar month.
+
+        Returns ``None`` when there are no holdings.
+        """
+        period_start = datetime.date(year, month, 1)
+        last_day = calendar.monthrange(year, month)[1]
+        period_end = datetime.date(year, month, last_day)
+        return await self._build_report(db, period_start, period_end)
+
+    async def _build_report(
+        self,
+        db: AsyncSession,
+        period_start: datetime.date,
+        period_end: datetime.date,
+    ) -> MonthlyReportData | None:
+        """Core report-building logic shared by all public methods."""
         rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
         holdings = rows.scalars().all()
 
@@ -75,7 +117,6 @@ class ReportService:
 
         tickers = [h.stock.ticker for h in holdings]
 
-        # Fetch all cached prices for those tickers within the previous month.
         price_rows = await db.execute(
             select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
             .where(
@@ -85,7 +126,6 @@ class ReportService:
             )
         )
 
-        # Build {ticker: {date: price}} mapping.
         prices: dict[str, dict[datetime.date, Decimal]] = {}
         for ticker, date, close_price in price_rows:
             prices.setdefault(ticker, {})[date] = close_price

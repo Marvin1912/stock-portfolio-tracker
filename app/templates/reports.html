@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Monthly Reports — Terminal Ledger{% endblock %}
+
+{% block content %}
+<h1>Monthly Reports</h1>
+<p>Historical portfolio performance, one month at a time.</p>
+
+{% if months %}
+<table style="margin-top: 1.5rem;">
+  <thead>
+    <tr>
+      <th>Period</th>
+      <th>Date Range</th>
+      <th class="actions"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in months %}
+    <tr>
+      <td><span class="text-mono" style="font-weight: 600;">{{ m.label }}</span></td>
+      <td style="color: var(--muted); font-family: var(--font-mono); font-size: 0.85rem;">
+        {{ m.period_start.strftime("%d %b %Y") }} – {{ m.period_end.strftime("%d %b %Y") }}
+      </td>
+      <td class="actions">
+        <a href="/reports/{{ m.year }}/{{ '%02d'|format(m.month) }}"
+           style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600;">
+          View &rarr;
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div style="margin-top: 2rem; text-align: center; padding: 3rem 1.5rem; border: 1px dashed var(--border); border-radius: var(--radius);">
+  <p style="font-family: var(--font-mono); font-size: 2rem; color: var(--border); margin-bottom: 1rem;">[ ]</p>
+  <p style="font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">No reports yet</p>
+  <p style="font-size: 0.9rem;">Reports will appear here once a full calendar month of price data has been recorded.</p>
+</div>
+{% endif %}
+{% endblock %}
