@@ -20,6 +20,7 @@ from app.routers import (
     import_pdf,
     import_xml,
     portfolio,
+    reports,
     stocks,
 )
 
@@ -128,6 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(import_pdf.router)
     app.include_router(import_xml.router)
     app.include_router(admin.router)
+    app.include_router(reports.router)
     # Future routers (uncomment as implemented):
     # app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["auth"])
     # app.include_router(portfolios.router, prefix="/api/v1/portfolios", tags=["portfolios"])

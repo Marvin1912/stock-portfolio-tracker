@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}{{ month_label }} Report — Terminal Ledger{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Back nav ────────────────────────────────────────────────── */
+  .back-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.65rem;
+    margin-bottom: 2rem;
+    text-decoration: none;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .back-nav:hover {
+    color: var(--text);
+    border-color: var(--muted);
+    text-decoration: none;
+    opacity: 1;
+  }
+
+  /* ── Stats strip ─────────────────────────────────────────────── */
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 640px) {
+    .stats-strip { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .stat-value {
+    font-family: var(--font-mono);
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+  .stat-value.na {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 1.1rem;
+  }
+  .stat-value.positive { color: var(--accent); }
+  .stat-value.negative { color: var(--danger); }
+  .stat-value.neutral  { color: var(--text); }
+
+  /* ── Report header ───────────────────────────────────────────── */
+  .report-header {
+    margin-bottom: 2rem;
+  }
+  .report-period {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/reports" class="back-nav">&#8592; All Reports</a>
+
+{% if report is none %}
+<div style="text-align: center; padding: 3rem 1.5rem; border: 1px dashed var(--border); border-radius: var(--radius);">
+  <p style="font-family: var(--font-mono); font-size: 2rem; color: var(--border); margin-bottom: 1rem;">[ ]</p>
+  <p style="font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">No data for {{ month_label }}</p>
+  <p style="font-size: 0.9rem;">No holdings were found. Add stocks to your portfolio to generate reports.</p>
+</div>
+{% else %}
+
+<div class="report-header">
+  <h1>{{ report.month_label }}</h1>
+  <p class="report-period">{{ report.period_start.strftime("%d %b %Y") }} – {{ report.period_end.strftime("%d %b %Y") }}</p>
+</div>
+
+<div class="stats-strip">
+  <div class="stat-card">
+    <span class="stat-label">Value on {{ report.period_start.strftime("%-d %b") }}</span>
+    {% if report.total_value_1st is not none %}
+      <span class="stat-value neutral">€{{ "%.2f"|format(report.total_value_1st) }}</span>
+    {% else %}
+      <span class="stat-value na">—</span>
+    {% endif %}
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-label">Value on {{ report.period_end.strftime("%-d %b") }}</span>
+    {% if report.total_value_last is not none %}
+      <span class="stat-value neutral">€{{ "%.2f"|format(report.total_value_last) }}</span>
+    {% else %}
+      <span class="stat-value na">—</span>
+    {% endif %}
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-label">Delta (€)</span>
+    {% if report.total_delta_eur is not none %}
+      {% set sign = "+" if report.total_delta_eur >= 0 else "" %}
+      {% set css  = "positive" if report.total_delta_eur >= 0 else "negative" %}
+      <span class="stat-value {{ css }}">{{ sign }}€{{ "%.2f"|format(report.total_delta_eur) }}</span>
+    {% else %}
+      <span class="stat-value na">—</span>
+    {% endif %}
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-label">Delta (%)</span>
+    {% if report.total_delta_pct is not none %}
+      {% set sign = "+" if report.total_delta_pct >= 0 else "" %}
+      {% set css  = "positive" if report.total_delta_pct >= 0 else "negative" %}
+      <span class="stat-value {{ css }}">{{ sign }}{{ report.total_delta_pct }}%</span>
+    {% else %}
+      <span class="stat-value na">—</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Per-Stock Breakdown</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Stock</th>
+        <th class="number">Qty</th>
+        <th class="number">Price 1st</th>
+        <th class="number">Price Last</th>
+        <th class="number">Delta (€)</th>
+        <th class="number">Delta (%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in report.lines %}
+      <tr>
+        <td>
+          <span style="font-family: var(--font-mono); font-weight: 600;">{{ line.ticker }}</span>
+          <br>
+          <span style="font-size: 0.8rem; color: var(--muted);">{{ line.name }}</span>
+        </td>
+        <td class="number">{{ line.quantity }}</td>
+        <td class="number">
+          {% if line.price_1st is not none %}
+            €{{ "%.2f"|format(line.price_1st) }}
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+        <td class="number">
+          {% if line.price_last is not none %}
+            €{{ "%.2f"|format(line.price_last) }}
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+        <td class="number">
+          {% if line.delta_eur is not none %}
+            {% set sign = "+" if line.delta_eur >= 0 else "" %}
+            {% set css  = "positive" if line.delta_eur >= 0 else "negative" %}
+            <span class="{{ css }}">{{ sign }}€{{ "%.2f"|format(line.delta_eur) }}</span>
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+        <td class="number">
+          {% if line.delta_pct is not none %}
+            {% set sign = "+" if line.delta_pct >= 0 else "" %}
+            {% set css  = "positive" if line.delta_pct >= 0 else "negative" %}
+            <span class="{{ css }}">{{ sign }}{{ line.delta_pct }}%</span>
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td><strong>Total</strong></td>
+        <td class="number"></td>
+        <td class="number">
+          {% if report.total_value_1st is not none %}
+            €{{ "%.2f"|format(report.total_value_1st) }}
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+        <td class="number">
+          {% if report.total_value_last is not none %}
+            €{{ "%.2f"|format(report.total_value_last) }}
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+        <td class="number">
+          {% if report.total_delta_eur is not none %}
+            {% set sign = "+" if report.total_delta_eur >= 0 else "" %}
+            {% set css  = "positive" if report.total_delta_eur >= 0 else "negative" %}
+            <span class="{{ css }}"><strong>{{ sign }}€{{ "%.2f"|format(report.total_delta_eur) }}</strong></span>
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+        <td class="number">
+          {% if report.total_delta_pct is not none %}
+            {% set sign = "+" if report.total_delta_pct >= 0 else "" %}
+            {% set css  = "positive" if report.total_delta_pct >= 0 else "negative" %}
+            <span class="{{ css }}"><strong>{{ sign }}{{ report.total_delta_pct }}%</strong></span>
+          {% else %}
+            <span class="na">—</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+{% endif %}
+{% endblock %}
