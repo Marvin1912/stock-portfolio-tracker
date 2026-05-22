@@ -13,8 +13,12 @@
       <span class="step-num">1</span> Upload
     </span>
     <span class="step-arrow">&rarr;</span>
-    <span class="step-item {{ 'active' if step == 'preview' else '' }}">
+    <span class="step-item {{ 'active' if step == 'preview' else ('completed' if step == 'done' else '') }}">
       <span class="step-num">2</span> Preview
+    </span>
+    <span class="step-arrow">&rarr;</span>
+    <span class="step-item {{ 'active' if step == 'done' else '' }}">
+      <span class="step-num">3</span> Import
     </span>
   </div>
 
@@ -158,6 +162,32 @@
 
     <div class="actions" style="margin-top: 1.25rem;">
       <a href="/import/xml"><button type="button" class="btn-ghost">Upload another file</button></a>
+    </div>
+
+    <form method="post" action="/import/xml/confirm" enctype="multipart/form-data"
+          style="margin-top: 1.25rem; padding: 1rem; border-top: 1px solid var(--border);">
+      <p class="note" style="margin-bottom: 0.5rem;">
+        Re-select the same file and click <strong>Confirm Import</strong> to persist these transactions.
+        Duplicates (by UUID) are skipped automatically.
+      </p>
+      <input type="file" name="file" accept=".xml,.zip" required style="margin-bottom: 0.75rem;">
+      <button type="submit" class="btn-primary">Confirm Import</button>
+    </form>
+  </div>
+
+  {% elif step == "done" %}
+  <div class="card anim-fade-slide-down">
+    <h2>Import complete</h2>
+    <p class="note">
+      Imported transactions from <strong>{{ filename or "the uploaded file" }}</strong>.
+    </p>
+    <ul style="margin-left: 1.2rem;">
+      <li><strong>{{ summary.created }}</strong> new transaction(s) inserted</li>
+      <li><strong>{{ summary.skipped_existing }}</strong> already existed (skipped)</li>
+      <li><strong>{{ summary.skipped_unsupported }}</strong> unsupported type or missing security (skipped)</li>
+    </ul>
+    <div class="actions" style="margin-top: 1.25rem;">
+      <a href="/import/xml"><button type="button" class="btn-ghost">Import another file</button></a>
       <a href="/"><button type="button" class="btn-primary">Back to portfolio</button></a>
     </div>
   </div>

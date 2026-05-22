@@ -318,3 +318,36 @@ async def test_import_xml_post_shows_preview(client: AsyncClient) -> None:
     assert "SAP.DE" in response.text
     assert "DIVIDENDS" in response.text
     assert "BUY" in response.text
+
+
+@pytest.mark.asyncio
+async def test_import_xml_confirm_persists_transactions(client: AsyncClient) -> None:
+    """POST /import/xml/confirm re-parses the file and calls the import service."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.transaction_import_service import ImportSummary
+
+    summary = ImportSummary(created=3, skipped_existing=0, skipped_unsupported=0)
+    with patch(
+        "app.routers.import_xml._transaction_import.import_xml_result",
+        new=AsyncMock(return_value=summary),
+    ) as mock_import:
+        response = await client.post(
+            "/import/xml/confirm",
+            files={"file": ("portfolio.xml", SAMPLE_XML.encode("utf-8"), "application/xml")},
+        )
+
+    assert response.status_code == 200
+    assert "Import complete" in response.text
+    assert "3" in response.text
+    assert mock_import.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_import_xml_confirm_rejects_bad_filename(client: AsyncClient) -> None:
+    response = await client.post(
+        "/import/xml/confirm",
+        files={"file": ("report.txt", b"hello", "text/plain")},
+    )
+    assert response.status_code == 200
+    assert ".xml or .zip" in response.text
