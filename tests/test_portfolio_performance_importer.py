@@ -308,46 +308,105 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
 
 @pytest.mark.asyncio
 async def test_import_xml_post_shows_preview(client: AsyncClient) -> None:
-    response = await client.post(
-        "/import/xml",
-        files={"file": ("portfolio.xml", SAMPLE_XML.encode("utf-8"), "application/xml")},
-    )
-    assert response.status_code == 200
-    assert "File summary" in response.text
-    assert "CBK.DE" in response.text
-    assert "SAP.DE" in response.text
-    assert "DIVIDENDS" in response.text
-    assert "BUY" in response.text
-
-
-@pytest.mark.asyncio
-async def test_import_xml_confirm_persists_transactions(client: AsyncClient) -> None:
-    """POST /import/xml/confirm re-parses the file and calls the import service."""
+    from decimal import Decimal
     from unittest.mock import AsyncMock, patch
 
-    from app.services.transaction_import_service import ImportSummary
+    from app.services.stock_lookup import StockInfo
 
-    summary = ImportSummary(created=3, skipped_existing=0, skipped_unsupported=0)
+    # Both XML tickers resolve cleanly via yfinance.
+    fake_info = StockInfo(
+        ticker="X", name="Mocked", currency="EUR", current_price=Decimal("1")
+    )
     with patch(
-        "app.routers.import_xml._transaction_import.import_xml_result",
-        new=AsyncMock(return_value=summary),
-    ) as mock_import:
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(return_value=fake_info),
+    ):
         response = await client.post(
-            "/import/xml/confirm",
+            "/import/xml",
             files={"file": ("portfolio.xml", SAMPLE_XML.encode("utf-8"), "application/xml")},
         )
 
     assert response.status_code == 200
+    assert "File summary" in response.text
+    assert "Securities" in response.text
+    assert "CBK.DE" in response.text
+    assert "SAP.DE" in response.text
+    assert "DIVIDENDS" in response.text
+    assert "BUY" in response.text
+    # Token-based confirm form is rendered.
+    assert 'name="token"' in response.text
+
+
+@pytest.mark.asyncio
+async def test_import_xml_confirm_persists_via_token(client: AsyncClient) -> None:
+    """POST /import/xml/confirm reads the cached parse result via token."""
+    from decimal import Decimal
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.stock_lookup import StockInfo
+    from app.services.transaction_import_service import ImportSummary
+
+    fake_info = StockInfo(
+        ticker="X", name="Mocked", currency="EUR", current_price=Decimal("1")
+    )
+    summary = ImportSummary(created=3, skipped_existing=0, skipped_unsupported=0)
+
+    with patch(
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(return_value=fake_info),
+    ):
+        preview = await client.post(
+            "/import/xml",
+            files={"file": ("portfolio.xml", SAMPLE_XML.encode("utf-8"), "application/xml")},
+        )
+    token = _extract_token(preview.text)
+    assert token
+
+    with patch(
+        "app.routers.import_xml._transaction_import.import_xml_result",
+        new=AsyncMock(return_value=summary),
+    ) as mock_import:
+        response = await client.post("/import/xml/confirm", data={"token": token})
+
+    assert response.status_code == 200
     assert "Import complete" in response.text
-    assert "3" in response.text
     assert mock_import.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_import_xml_confirm_rejects_bad_filename(client: AsyncClient) -> None:
-    response = await client.post(
-        "/import/xml/confirm",
-        files={"file": ("report.txt", b"hello", "text/plain")},
-    )
+async def test_import_xml_confirm_refuses_when_unresolved(client: AsyncClient) -> None:
+    """Confirm rerenders the preview with an error when any row is unresolved."""
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(return_value=None),  # every lookup fails → all needs_attention
+    ), patch(
+        "app.services.xml_security_resolver.resolve_isin",
+        new=AsyncMock(return_value=None),
+    ):
+        preview = await client.post(
+            "/import/xml",
+            files={"file": ("portfolio.xml", SAMPLE_XML.encode("utf-8"), "application/xml")},
+        )
+    token = _extract_token(preview.text)
+    assert token
+
+    response = await client.post("/import/xml/confirm", data={"token": token})
     assert response.status_code == 200
-    assert ".xml or .zip" in response.text
+    assert "Resolve every security" in response.text
+
+
+@pytest.mark.asyncio
+async def test_import_xml_confirm_rejects_unknown_token(client: AsyncClient) -> None:
+    response = await client.post("/import/xml/confirm", data={"token": "garbage"})
+    assert response.status_code == 200
+    assert "expired" in response.text.lower()
+
+
+def _extract_token(html: str) -> str | None:
+    """Pull the hidden token field out of the confirm form."""
+    import re
+
+    m = re.search(r'name="token"\s+value="([^"]+)"', html)
+    return m.group(1) if m else None

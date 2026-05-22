@@ -1,0 +1,17 @@
+{# Confirm form/button — also rendered as an OOB swap from /import/xml/resolve-row. #}
+<form id="confirm-import-form"
+      method="post"
+      action="/import/xml/confirm"
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+      style="margin-top: 1.25rem;">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button type="submit" class="btn-primary"
+          {% if not all_valid %}disabled title="Resolve every security first"{% endif %}>
+    Confirm Import
+  </button>
+  {% if not all_valid %}
+  <span style="color: var(--muted); font-size: 0.85rem; margin-left: 0.6rem;">
+    Resolve all securities to enable import.
+  </span>
+  {% endif %}
+</form>

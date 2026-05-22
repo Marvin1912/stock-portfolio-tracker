@@ -104,6 +104,39 @@
   </div>
   {% endif %}
 
+  {% if error %}
+  <div class="card anim-fade-slide-down" style="border-color: var(--danger);">
+    <div class="error">{{ error }}</div>
+  </div>
+  {% endif %}
+
+  <div class="card anim-fade-slide-up">
+    <h2>Securities ({{ securities | length }})</h2>
+    <p class="note">
+      Each security in the XML is checked against Yahoo Finance. Rows marked
+      <strong>Needs ticker</strong> require a manual ticker before you can
+      confirm the import (e.g. Tradegate <code>.TG</code> tickers should be
+      replaced with their <code>.DE</code> equivalent; bare crypto symbols
+      need a quote pair like <code>DOGE-EUR</code>).
+    </p>
+    <div style="overflow-x: auto;">
+      <table class="table-striped" id="sec-table">
+        <thead>
+          <tr>
+            <th style="width: 9rem;">Status</th>
+            <th>Original (from XML)</th>
+            <th>Resolved ticker</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for resolution in securities %}
+            {% include "partials/security_row.html" %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="card anim-fade-slide-up">
     <h2>Transactions ({{ result.total_count }})</h2>
     {% if result.transactions %}
@@ -164,15 +197,13 @@
       <a href="/import/xml"><button type="button" class="btn-ghost">Upload another file</button></a>
     </div>
 
-    <form method="post" action="/import/xml/confirm" enctype="multipart/form-data"
-          style="margin-top: 1.25rem; padding: 1rem; border-top: 1px solid var(--border);">
+    <div style="margin-top: 1.25rem; padding: 1rem; border-top: 1px solid var(--border);">
       <p class="note" style="margin-bottom: 0.5rem;">
-        Re-select the same file and click <strong>Confirm Import</strong> to persist these transactions.
+        Click <strong>Confirm Import</strong> to persist these transactions.
         Duplicates (by UUID) are skipped automatically.
       </p>
-      <input type="file" name="file" accept=".xml,.zip" required style="margin-bottom: 0.75rem;">
-      <button type="submit" class="btn-primary">Confirm Import</button>
-    </form>
+      {% include "partials/confirm_button.html" %}
+    </div>
   </div>
 
   {% elif step == "done" %}

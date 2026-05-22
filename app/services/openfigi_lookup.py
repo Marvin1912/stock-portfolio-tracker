@@ -87,31 +87,15 @@ def _build_yfinance_ticker(ticker: str, exch_code: str) -> str:
     return f"{ticker}{suffix}"
 
 
-async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
-    """Return the ticker symbol for a WKN, or None if it cannot be resolved.
-
-    The returned ticker includes the yfinance exchange suffix (e.g. ``RHM.DE``
-    for Rheinmetall AG on XETRA) so that yfinance can unambiguously identify
-    the correct security.
-
-    Args:
-        wkn: The 6-character WKN (Wertpapierkennnummer) to resolve.
-        api_key: Optional OpenFIGI API key for higher rate limits.
-                 Unauthenticated requests are limited to 25 req/min.
-
-    Returns:
-        The resolved ticker symbol (upper-case, with exchange suffix), or None
-        on failure.
-    """
-    wkn = wkn.strip().upper()
-    if not wkn:
-        return None
-
+async def _resolve_via_openfigi(
+    id_type: str, id_value: str, api_key: str
+) -> str | None:
+    """Post one id to OpenFIGI and return the preferred yfinance ticker."""
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
         headers["X-OPENFIGI-APIKEY"] = api_key
 
-    payload = [{"idType": "ID_WERTPAPIER", "idValue": wkn}]
+    payload = [{"idType": id_type, "idValue": id_value}]
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -119,13 +103,17 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
             response.raise_for_status()
             data = response.json()
     except httpx.HTTPError as exc:
-        logger.warning("OpenFIGI request failed for WKN %s: %s", wkn, exc)
+        logger.warning("OpenFIGI request failed for %s %s: %s", id_type, id_value, exc)
         return None
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Unexpected error during OpenFIGI lookup for WKN %s: %s", wkn, exc)
+        logger.warning(
+            "Unexpected error during OpenFIGI lookup for %s %s: %s",
+            id_type,
+            id_value,
+            exc,
+        )
         return None
 
-    # Response shape: [{"data": [{"ticker": "RHM", "exchCode": "GR", ...}]}]
     try:
         results: list[dict[str, Any]] = data[0]["data"]
     except (KeyError, IndexError, TypeError):
@@ -134,21 +122,18 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
     if not results:
         return None
 
-    # Build a lookup: exchCode → first matching result
     by_exch: dict[str, dict[str, Any]] = {}
     for item in results:
         code = item.get("exchCode", "")
         if code and code not in by_exch:
             by_exch[code] = item
 
-    # Pick the best result according to our preference order
     chosen: dict[str, Any] | None = None
     for preferred in _PREFERRED_EXCHCODES:
         if preferred in by_exch:
             chosen = by_exch[preferred]
             break
 
-    # Fall back to the first result if none of the preferred codes matched
     if chosen is None:
         chosen = results[0]
 
@@ -159,10 +144,27 @@ async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
     exch_code = str(chosen.get("exchCode", ""))
     yf_ticker = _build_yfinance_ticker(str(ticker).upper(), exch_code)
     logger.debug(
-        "WKN %s resolved to OpenFIGI ticker %s (exchCode=%s) → yfinance ticker %s",
-        wkn,
+        "%s %s resolved to OpenFIGI ticker %s (exchCode=%s) → yfinance ticker %s",
+        id_type,
+        id_value,
         ticker,
         exch_code,
         yf_ticker,
     )
     return yf_ticker
+
+
+async def resolve_wkn(wkn: str, api_key: str = "") -> str | None:
+    """Return the yfinance ticker for a WKN, or None if it cannot be resolved."""
+    wkn = wkn.strip().upper()
+    if not wkn:
+        return None
+    return await _resolve_via_openfigi("ID_WERTPAPIER", wkn, api_key)
+
+
+async def resolve_isin(isin: str, api_key: str = "") -> str | None:
+    """Return the yfinance ticker for an ISIN, or None if it cannot be resolved."""
+    isin = isin.strip().upper()
+    if not isin:
+        return None
+    return await _resolve_via_openfigi("ID_ISIN", isin, api_key)

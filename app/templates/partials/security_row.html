@@ -1,0 +1,62 @@
+{% set r = resolution %}
+<tr id="sec-row-{{ r.uuid }}" class="sec-row sec-row--{{ r.status }}"
+    data-status="{{ r.status }}">
+  <td>
+    {% if r.status == "valid" %}
+    <span class="ticker-hint positive"><span class="ticker-hint-dot"></span> Valid</span>
+    {% else %}
+    <span class="ticker-hint negative"><span class="ticker-hint-dot"></span> Needs ticker</span>
+    {% endif %}
+  </td>
+  <td>
+    <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+      <span>{{ r.original_name or "—" }}</span>
+      <span class="text-mono" style="color: var(--muted); font-size: 0.78rem;">
+        XML: {{ r.original_ticker or "—" }}{% if r.isin %} · ISIN {{ r.isin }}{% endif %}
+      </span>
+    </div>
+  </td>
+  <td>
+    {% if r.status == "valid" %}
+      <span class="text-mono">{{ r.resolved_ticker }}</span>
+      {% if r.yahoo_name %}
+      <span style="color: var(--muted); font-size: 0.78rem;"> · {{ r.yahoo_name }}</span>
+      {% endif %}
+      <span class="file-badge" style="margin-left: 0.4rem;">
+        {% if r.suggestion_source == "xml" %}from XML
+        {% elif r.suggestion_source == "openfigi" %}via OpenFIGI
+        {% elif r.suggestion_source == "crypto_pair" %}crypto pair
+        {% else %}manual
+        {% endif %}
+      </span>
+      <span class="file-badge" style="margin-left: 0.25rem;">{{ r.asset_type }}</span>
+    {% else %}
+      <form class="sec-fix-form"
+            hx-post="/import/xml/resolve-row"
+            hx-target="#sec-row-{{ r.uuid }}"
+            hx-swap="outerHTML"
+            style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="uuid" value="{{ r.uuid }}">
+        <input
+          type="text"
+          name="ticker"
+          value="{{ r.resolved_ticker or '' }}"
+          placeholder="e.g. SYK.DE or DOGE-EUR"
+          autocomplete="off"
+          class="input-mono input-glow"
+          style="min-width: 10rem;">
+        <select name="asset_type" class="input-mono">
+          <option value="STOCK" {% if r.asset_type == "STOCK" %}selected{% endif %}>STOCK</option>
+          <option value="CRYPTO" {% if r.asset_type == "CRYPTO" %}selected{% endif %}>CRYPTO</option>
+        </select>
+        <button type="submit" class="btn-ghost">Check</button>
+        {% if r.resolved_ticker %}
+        <span class="ticker-hint negative" style="margin-left: 0.25rem;">
+          <span class="ticker-hint-dot"></span> "{{ r.resolved_ticker }}" not found on Yahoo
+        </span>
+        {% endif %}
+      </form>
+    {% endif %}
+  </td>
+</tr>

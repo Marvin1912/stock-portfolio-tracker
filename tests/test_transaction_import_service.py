@@ -239,6 +239,31 @@ async def test_buy_without_security_is_skipped() -> None:
     assert summary.skipped_unsupported == 1
 
 
+@pytest.mark.asyncio
+async def test_asset_type_from_security_is_propagated_to_stock() -> None:
+    """When SecurityInfo.asset_type is CRYPTO, the new Stock row must reflect it."""
+    db = _make_db()
+    crypto_sec = SecurityInfo(
+        uuid="sec-crypto",
+        name="Dogecoin EUR",
+        isin=None,
+        ticker="DOGE-EUR",
+        currency="EUR",
+        asset_type="CRYPTO",
+    )
+    tx = _tx(uuid="buy-doge", type="BUY", security=crypto_sec)
+
+    await TransactionImportService().import_xml_result(_result([tx]), db)
+
+    inserted_stocks = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Stock"
+    ]
+    assert len(inserted_stocks) == 1
+    assert inserted_stocks[0].asset_type == "CRYPTO"
+
+
 # ---------------------------------------------------------------------------
 # Idempotency on re-import — service-level integration with the parser
 # ---------------------------------------------------------------------------
