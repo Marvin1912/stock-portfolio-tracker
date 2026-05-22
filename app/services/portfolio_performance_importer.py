@@ -31,6 +31,7 @@ class SecurityInfo:
     isin: str | None = None
     ticker: str | None = None
     currency: str | None = None
+    asset_type: str | None = None
 
     @property
     def display(self) -> str:

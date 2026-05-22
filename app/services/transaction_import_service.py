@@ -136,7 +136,7 @@ class TransactionImportService:
             ticker=ticker,
             name=security.name or ticker,
             currency=(security.currency or "EUR").upper(),
-            asset_type=ASSET_TYPE_STOCK,
+            asset_type=(security.asset_type or ASSET_TYPE_STOCK).upper(),
         )
         db.add(stock)
         await db.flush()
