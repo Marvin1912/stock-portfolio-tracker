@@ -12,6 +12,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.holding import Holding
+    from app.models.transaction import Transaction
 
 
 ASSET_TYPE_STOCK = "STOCK"
@@ -40,4 +41,7 @@ class Stock(Base):
 
     holdings: Mapped[list[Holding]] = relationship(
         "Holding", back_populates="stock", cascade="all, delete-orphan"
+    )
+    transactions: Mapped[list[Transaction]] = relationship(
+        "Transaction", back_populates="stock", cascade="all, delete-orphan"
     )
