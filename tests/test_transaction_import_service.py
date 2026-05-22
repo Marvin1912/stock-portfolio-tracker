@@ -247,9 +247,8 @@ async def test_buy_without_security_is_skipped() -> None:
 @pytest.mark.asyncio
 async def test_reimport_is_idempotent() -> None:
     """Running the importer twice on the same XML inserts each row only once."""
-    from tests.test_portfolio_performance_importer import SAMPLE_XML
-
     from app.services.portfolio_performance_importer import PortfolioPerformanceImporter
+    from tests.test_portfolio_performance_importer import SAMPLE_XML
 
     parsed = PortfolioPerformanceImporter().parse_bytes(SAMPLE_XML.encode("utf-8"))
 

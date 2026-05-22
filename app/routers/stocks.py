@@ -20,6 +20,7 @@ from app.models.holding import Holding
 from app.models.price_cache import PriceCache
 from app.models.stock import Stock
 from app.services.fx_service import to_eur
+from app.services.price_service import get_latest_close
 
 router = APIRouter(tags=["stocks"])
 
@@ -64,8 +65,9 @@ async def stock_detail(
     quantity: Decimal | None = None
     current_value: Decimal | None = None
     eur_price: Decimal | None = None
-    if stock.current_price is not None:
-        eur_price = to_eur(stock.current_price, stock.currency)
+    latest_close = await get_latest_close(stock.ticker, db)
+    if latest_close is not None:
+        eur_price = to_eur(latest_close, stock.currency)
     if holding is not None:
         quantity = holding.quantity
         if eur_price is not None:

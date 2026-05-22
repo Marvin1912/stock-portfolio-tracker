@@ -86,6 +86,17 @@ async def get_price(ticker: str, date: datetime.date, db: AsyncSession) -> Decim
     return row
 
 
+async def get_latest_close(ticker: str, db: AsyncSession) -> Decimal | None:
+    """Return the most recently cached close price for *ticker*, or None."""
+    result = await db.execute(
+        select(PriceCache.close_price)
+        .where(PriceCache.ticker == ticker.upper())
+        .order_by(PriceCache.date.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 class StockPriceService:
     """Provides price and metadata lookups for stock tickers via yfinance."""
 
