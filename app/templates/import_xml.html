@@ -50,6 +50,25 @@
     </form>
   </div>
 
+  <div class="card" style="border-color: var(--danger); margin-top: 1.25rem;">
+    <h2 style="color: var(--danger);">Danger zone</h2>
+    <p class="note">
+      Deletes every transaction that was imported from XML, plus any stocks
+      that no longer have transactions after the cleanup. Manual and PDF
+      transactions are untouched.
+    </p>
+    <button
+      type="button"
+      class="btn-ghost"
+      hx-post="/admin/clear-xml-import"
+      hx-target="#clear-xml-result"
+      hx-swap="innerHTML"
+      hx-confirm="Delete all XML-imported transactions and their orphan stocks? This cannot be undone.">
+      Clear XML-imported data
+    </button>
+    <div id="clear-xml-result"></div>
+  </div>
+
   {% elif step == "preview" %}
   <div class="summary-card anim-fade-slide-down">
     <h2>File summary</h2>

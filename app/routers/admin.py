@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_async_session
+from app.services.import_cleanup import clear_xml_imports
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_DB = Depends(get_async_session)
 
 
 @router.post("/trigger-report", status_code=200)
@@ -42,3 +49,16 @@ async def refresh_prices(response: Response) -> dict[str, str]:
 
     response.headers["HX-Refresh"] = "true"
     return {"status": "ok", "message": "Price cache and FX rates refreshed."}
+
+
+@router.post("/clear-xml-import", response_class=HTMLResponse)
+async def clear_xml_import(db: AsyncSession = _DB) -> HTMLResponse:
+    """Delete every transaction imported from XML, plus any orphaned stocks."""
+    summary = await clear_xml_imports(db)
+    return HTMLResponse(
+        f'<div class="ticker-hint positive" style="margin-top: 0.75rem;">'
+        f'<span class="ticker-hint-dot"></span> '
+        f"Cleared {summary.deleted_transactions} XML transaction(s) and "
+        f"{summary.deleted_stocks} orphaned stock(s)."
+        f"</div>"
+    )
