@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -14,6 +15,8 @@ from app.services.portfolio_performance_importer import (
     ParseResult,
     SecurityInfo,
 )
+
+logger = logging.getLogger(__name__)
 
 # Portfolio Performance type code → our internal Transaction.type.
 # Anything outside this map is ignored (e.g. DEPOSIT, REMOVAL, INTEREST).
@@ -55,6 +58,12 @@ class TransactionImportService:
                 continue
 
         await db.flush()
+        logger.info(
+            "XML import done: created=%d, skipped_existing=%d, skipped_unsupported=%d",
+            summary.created,
+            summary.skipped_existing,
+            summary.skipped_unsupported,
+        )
         return summary
 
     async def _persist(
@@ -66,6 +75,13 @@ class TransactionImportService:
         mapped_type = _PP_TYPE_MAP.get(tx.type)
         if mapped_type is None:
             summary.skipped_unsupported += 1
+            logger.info(
+                "Skipped XML transaction %s — unsupported PP type %r (kind=%s, security=%s)",
+                tx.uuid or "?",
+                tx.type,
+                tx.kind,
+                _describe_security(tx.security),
+            )
             return False
 
         # For BUY/SELL keep only the portfolio side — the paired account leg
@@ -73,10 +89,22 @@ class TransactionImportService:
         # double-counted as a position change.
         if mapped_type in {"BUY", "SELL"} and tx.kind != "portfolio":
             summary.skipped_unsupported += 1
+            logger.info(
+                "Skipped XML transaction %s — %s account-leg (paired with a portfolio entry, security=%s)",
+                tx.uuid or "?",
+                mapped_type,
+                _describe_security(tx.security),
+            )
             return False
 
         if not tx.uuid:
             summary.skipped_unsupported += 1
+            logger.info(
+                "Skipped XML transaction — missing UUID (type=%s, kind=%s, security=%s)",
+                tx.type,
+                tx.kind,
+                _describe_security(tx.security),
+            )
             return False
 
         existing = await db.execute(
@@ -95,6 +123,21 @@ class TransactionImportService:
         # BUY/SELL/TRANSFER without a stock cannot be meaningfully tracked.
         if mapped_type in {"BUY", "SELL", "TRANSFER_IN", "TRANSFER_OUT"} and stock_id is None:
             summary.skipped_unsupported += 1
+            if tx.security is None:
+                reason = "no <security> element on transaction"
+            elif not (tx.security.ticker or "").strip():
+                reason = (
+                    f"security has no ticker symbol "
+                    f"(uuid={tx.security.uuid}, name={tx.security.name!r}, isin={tx.security.isin!r})"
+                )
+            else:
+                reason = "stock upsert failed"
+            logger.info(
+                "Skipped XML transaction %s — %s without resolvable stock: %s",
+                tx.uuid,
+                mapped_type,
+                reason,
+            )
             return False
 
         db.add(
@@ -141,3 +184,12 @@ class TransactionImportService:
         db.add(stock)
         await db.flush()
         return stock
+
+
+def _describe_security(security: SecurityInfo | None) -> str:
+    if security is None:
+        return "none"
+    return (
+        f"uuid={security.uuid}, name={security.name!r}, "
+        f"isin={security.isin!r}, ticker={security.ticker!r}"
+    )
