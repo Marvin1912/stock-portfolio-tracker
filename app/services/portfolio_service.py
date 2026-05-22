@@ -11,8 +11,13 @@ from sqlalchemy.orm import selectinload
 
 from app.models.holding import Holding
 from app.models.price_cache import PriceCache
+from app.models.stock import Stock
+from app.models.transaction import Transaction
 from app.schemas.holdings import HoldingSummaryItem, PortfolioSummary
 from app.services.fx_service import to_eur
+
+_POSITION_TYPES = ("BUY", "SELL", "TRANSFER_IN", "TRANSFER_OUT")
+_POSITIVE_TYPES = {"BUY", "TRANSFER_IN"}
 
 
 class PortfolioService:
@@ -78,48 +83,98 @@ class PortfolioService:
     ) -> list[tuple[datetime.date, Decimal]]:
         """Return daily total portfolio values for the past year.
 
-        For each date in PriceCache, the portfolio value is calculated as
-        sum(quantity × close_price) across all holdings that have a cached
-        price on that date.  Dates with no price data are omitted.
-        """
-        rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
-        holdings = rows.scalars().all()
+        Replays the transaction history so each chart date reflects the
+        positions that were actually held on that day — not today's
+        snapshot projected backwards.
 
-        if not holdings:
+        Algorithm
+        ---------
+        1. Load every position-affecting transaction (BUY, SELL,
+           TRANSFER_IN, TRANSFER_OUT) ordered by date, per stock.
+        2. Walk the price-cache dates forward.  For each date *d* we
+           advance a per-stock pointer over events with ``event.date ≤ d``
+           and add the signed share delta to a running ``positions[sid]``
+           tally — so each event is visited exactly once across the walk.
+        3. Multiply the running positions by the cached close price on
+           date *d*, convert to EUR via the FX cache, and sum.
+        """
+        event_rows = await db.execute(
+            select(
+                Transaction.stock_id,
+                Transaction.date,
+                Transaction.type,
+                Transaction.shares,
+            )
+            .where(Transaction.stock_id.is_not(None))
+            .where(Transaction.type.in_(_POSITION_TYPES))
+            .order_by(Transaction.stock_id, Transaction.date)
+        )
+
+        events_by_stock: dict[int, list[tuple[datetime.date, Decimal]]] = {}
+        for stock_id, dt, tx_type, shares in event_rows:
+            if stock_id is None:
+                continue
+            delta = shares if tx_type in _POSITIVE_TYPES else -shares
+            event_date = dt.date() if hasattr(dt, "date") else dt
+            events_by_stock.setdefault(stock_id, []).append((event_date, delta))
+
+        if not events_by_stock:
             return []
 
-        tickers = [h.stock.ticker for h in holdings]
-        qty_by_ticker = {h.stock.ticker: h.quantity for h in holdings}
-        currency_by_ticker = {h.stock.ticker: h.stock.currency for h in holdings}
+        stock_ids = list(events_by_stock.keys())
+        stock_rows = await db.execute(
+            select(Stock.id, Stock.ticker, Stock.currency).where(
+                Stock.id.in_(stock_ids)
+            )
+        )
+        stock_info: dict[int, tuple[str, str]] = {
+            sid: (ticker.upper(), currency) for sid, ticker, currency in stock_rows
+        }
+        tickers_upper = [info[0] for info in stock_info.values()]
+        if not tickers_upper:
+            return []
 
         one_year_ago = datetime.date.today() - datetime.timedelta(days=365)
         price_rows = await db.execute(
             select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
             .where(
-                PriceCache.ticker.in_(tickers),
+                PriceCache.ticker.in_(tickers_upper),
                 PriceCache.date >= one_year_ago,
             )
             .order_by(PriceCache.date)
         )
 
         prices_by_date: dict[datetime.date, dict[str, Decimal]] = {}
-        for ticker, date, close_price in price_rows:
+        for ticker, dt, close_price in price_rows:
             if close_price.is_finite():
-                prices_by_date.setdefault(date, {})[ticker] = close_price
+                prices_by_date.setdefault(dt, {})[ticker.upper()] = close_price
 
-        all_tickers = set(tickers)
+        if not prices_by_date:
+            return []
+
+        positions: dict[int, Decimal] = {sid: Decimal("0") for sid in stock_ids}
+        event_ptrs: dict[int, int] = {sid: 0 for sid in stock_ids}
+
         performance: list[tuple[datetime.date, Decimal]] = []
         for date in sorted(prices_by_date):
+            for sid, events in events_by_stock.items():
+                ptr = event_ptrs[sid]
+                while ptr < len(events) and events[ptr][0] <= date:
+                    positions[sid] += events[ptr][1]
+                    ptr += 1
+                event_ptrs[sid] = ptr
+
             day_prices = prices_by_date[date]
-            # Skip dates where not all holdings have price data to avoid
-            # artificially low totals from partial coverage.
-            if day_prices.keys() < all_tickers:
-                continue
-            total = sum(
-                (qty_by_ticker[t] * to_eur(p, currency_by_ticker[t])
-                 for t, p in day_prices.items()),
-                Decimal("0"),
-            )
+            total = Decimal("0")
+            for sid, qty in positions.items():
+                if qty == 0:
+                    continue
+                ticker, currency = stock_info[sid]
+                price = day_prices.get(ticker)
+                if price is None:
+                    continue
+                total += qty * to_eur(price, currency)
+
             performance.append((date, total))
 
         return performance
