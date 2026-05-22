@@ -8,8 +8,9 @@ rows.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import CursorResult, delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import Stock
@@ -33,8 +34,9 @@ async def clear_xml_imports(db: AsyncSession) -> CleanupSummary:
     )
     affected_stock_ids: set[int] = {row[0] for row in affected_ids_result.all()}
 
-    deleted_tx_result = await db.execute(
-        delete(Transaction).where(Transaction.source == TX_SOURCE_XML)
+    deleted_tx_result = cast(
+        CursorResult[object],
+        await db.execute(delete(Transaction).where(Transaction.source == TX_SOURCE_XML)),
     )
     deleted_transactions = deleted_tx_result.rowcount or 0
 
@@ -43,10 +45,13 @@ async def clear_xml_imports(db: AsyncSession) -> CleanupSummary:
         await recompute_holdings(db, affected_stock_ids)
 
         orphan_filter = ~exists().where(Transaction.stock_id == Stock.id)
-        deleted_stock_result = await db.execute(
-            delete(Stock)
-            .where(Stock.id.in_(affected_stock_ids))
-            .where(orphan_filter)
+        deleted_stock_result = cast(
+            CursorResult[object],
+            await db.execute(
+                delete(Stock)
+                .where(Stock.id.in_(affected_stock_ids))
+                .where(orphan_filter)
+            ),
         )
         deleted_stocks = deleted_stock_result.rowcount or 0
 
