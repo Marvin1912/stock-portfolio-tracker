@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
@@ -147,3 +148,97 @@ async def test_summary_usd_holding_converted_to_eur() -> None:
     assert summary.total_value == Decimal("10") * expected_eur_price
 
     fx_module._fx_cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# get_performance_history — transaction-aware (issue #99)
+# ---------------------------------------------------------------------------
+
+
+def _history_db(
+    events: list[tuple[int, datetime.datetime, str, str]],
+    stocks: dict[int, tuple[str, str]],
+    prices: dict[datetime.date, dict[str, str]],
+) -> AsyncMock:
+    """Build a mock session that returns ordered tuples for the three queries
+    portfolio_service.get_performance_history issues:
+
+    1. transaction events:  (stock_id, datetime, type, shares)
+    2. stock info:          (id, ticker, currency)
+    3. price cache rows:    (ticker, date, close_price)
+    """
+    event_rows = [(sid, dt, t, Decimal(sh)) for sid, dt, t, sh in events]
+    event_result = MagicMock()
+    event_result.__iter__ = lambda self: iter(event_rows)
+
+    stock_rows = [(sid, t, c) for sid, (t, c) in stocks.items()]
+    stock_result = MagicMock()
+    stock_result.__iter__ = lambda self: iter(stock_rows)
+
+    price_rows = [
+        (ticker, d, Decimal(p))
+        for d, by_ticker in prices.items()
+        for ticker, p in by_ticker.items()
+    ]
+    price_result = MagicMock()
+    price_result.__iter__ = lambda self: iter(price_rows)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[event_result, stock_result, price_result])
+    return db
+
+
+@pytest.mark.asyncio
+async def test_history_zero_before_buy_then_positive() -> None:
+    """A BUY on day 5 → days 1–4 read 0; days 5–9 show the position value."""
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _history_db(
+        events=[(1, datetime.datetime(2025, 1, 5), "BUY", "10")],
+        stocks={1: ("AAPL", "EUR")},
+        prices={
+            day(n): {"AAPL": "100.00"} for n in range(1, 10)
+        },
+    )
+
+    history = await PortfolioService().get_performance_history(db)
+
+    by_date = dict(history)
+    assert by_date[day(1)] == Decimal("0")
+    assert by_date[day(4)] == Decimal("0")
+    assert by_date[day(5)] == Decimal("1000.00")
+    assert by_date[day(9)] == Decimal("1000.00")
+
+
+@pytest.mark.asyncio
+async def test_history_sell_halves_value() -> None:
+    """A BUY of 10 on day 5 + SELL of 5 on day 8 → value halves from day 8."""
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _history_db(
+        events=[
+            (1, datetime.datetime(2025, 1, 5), "BUY", "10"),
+            (1, datetime.datetime(2025, 1, 8), "SELL", "5"),
+        ],
+        stocks={1: ("AAPL", "EUR")},
+        prices={day(n): {"AAPL": "100.00"} for n in range(1, 11)},
+    )
+
+    history = await PortfolioService().get_performance_history(db)
+
+    by_date = dict(history)
+    assert by_date[day(5)] == Decimal("1000.00")
+    assert by_date[day(7)] == Decimal("1000.00")
+    assert by_date[day(8)] == Decimal("500.00")
+    assert by_date[day(10)] == Decimal("500.00")
+
+
+@pytest.mark.asyncio
+async def test_history_returns_empty_when_no_position_events() -> None:
+    db = _history_db(events=[], stocks={}, prices={})
+
+    history = await PortfolioService().get_performance_history(db)
+
+    assert history == []
