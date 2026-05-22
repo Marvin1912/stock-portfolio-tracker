@@ -15,7 +15,10 @@ from app.database import get_async_session
 from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK
 from app.services import import_cache
 from app.services.holdings_service import recompute_holdings
-from app.services.portfolio_performance_importer import PortfolioPerformanceImporter
+from app.services.portfolio_performance_importer import (
+    ParseResult,
+    PortfolioPerformanceImporter,
+)
 from app.services.stock_lookup import fetch_stock_info
 from app.services.transaction_import_service import TransactionImportService
 from app.services.xml_security_resolver import (
@@ -240,8 +243,13 @@ async def import_xml_resolve_row(
 
 
 def _preview_context(
-    result, resolutions, token, filename, *, error: str | None = None  # type: ignore[no-untyped-def]
-) -> dict:  # type: ignore[type-arg]
+    result: ParseResult,
+    resolutions: dict[str, ResolvedSecurity],
+    token: str,
+    filename: str,
+    *,
+    error: str | None = None,
+) -> dict[str, object]:
     securities = sorted(
         resolutions.values(),
         key=lambda r: (r.status != "needs_attention", (r.original_name or "").lower()),
@@ -258,7 +266,9 @@ def _preview_context(
     }
 
 
-def _apply_resolutions(result, resolutions) -> None:  # type: ignore[no-untyped-def]
+def _apply_resolutions(
+    result: ParseResult, resolutions: dict[str, ResolvedSecurity]
+) -> None:
     """Push resolved tickers + asset_type back onto SecurityInfo before persist."""
     for sec in result.securities.values():
         resolution = resolutions.get(sec.uuid)
