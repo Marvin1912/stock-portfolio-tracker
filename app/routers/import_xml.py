@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
+from app.services.holdings_service import recompute_holdings
 from app.services.portfolio_performance_importer import PortfolioPerformanceImporter
 from app.services.transaction_import_service import TransactionImportService
 
@@ -122,6 +123,9 @@ async def import_xml_confirm(
         )
 
     summary = await _transaction_import.import_xml_result(result, db)
+
+    if summary.affected_stock_ids:
+        await recompute_holdings(db, summary.affected_stock_ids)
 
     return _render(
         request,
