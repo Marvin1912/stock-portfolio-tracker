@@ -163,56 +163,100 @@ async def test_import_pdf_confirm_all_invalid_returns_error(client: AsyncClient)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_import_from_holdings_creates_new_holding() -> None:
-    from app.services.import_service import ImportService
-
-    stock = MagicMock()
-    stock.id = 1
-
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = stock
-
-    holding_result = MagicMock()
-    holding_result.scalar_one_or_none.return_value = None
-
+def _stub_pdf_db(
+    *,
+    known_tickers: dict[str, int],
+    existing_uuids: set[str] | None = None,
+) -> AsyncMock:
+    """Mock DB for ImportService that:
+    - Returns a Stock for ``known_tickers`` (and None otherwise),
+    - Returns a hit on ``existing_uuids`` to simulate dedup,
+    - No-ops everything else, including the recompute path.
+    """
+    existing_uuids = existing_uuids or set()
     db = AsyncMock()
     db.add = MagicMock()
-    db.execute = AsyncMock(side_effect=[stock_result, holding_result])
+    db.flush = AsyncMock()
+    db.delete = AsyncMock()
+
+    async def _execute(stmt):  # type: ignore[no-untyped-def]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        result = MagicMock()
+
+        if "external_uuid" in compiled:
+            seen = next((u for u in existing_uuids if u in compiled), None)
+            result.scalar_one_or_none.return_value = 1 if seen else None
+            return result
+
+        if "stock.ticker" in compiled or "stock\".\"ticker" in compiled:
+            ticker = next((t for t in known_tickers if f"'{t}'" in compiled), None)
+            if ticker:
+                stock = MagicMock()
+                stock.id = known_tickers[ticker]
+                stock.ticker = ticker
+                stock.currency = "EUR"
+                result.scalar_one_or_none.return_value = stock
+            else:
+                result.scalar_one_or_none.return_value = None
+            return result
+
+        # recompute_holdings' aggregate / holdings queries: return empty.
+        result.all.return_value = []
+        result.scalars.return_value.all.return_value = []
+        result.scalar_one_or_none.return_value = None
+        return result
+
+    db.execute = AsyncMock(side_effect=_execute)
+    return db
+
+
+@pytest.mark.asyncio
+async def test_import_from_holdings_inserts_transaction() -> None:
+    from app.services.import_service import ImportService
+
+    db = _stub_pdf_db(known_tickers={"AAPL": 1})
 
     service = ImportService()
-    result = await service.import_from_holdings([("AAPL", Decimal("5"))], db)
+    result = await service.import_from_holdings(
+        [("AAPL", Decimal("5"))], db, source_file="report.pdf"
+    )
 
     assert result == [("AAPL", Decimal("5"))]
-    db.add.assert_called_once()
+    added = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert len(added) == 1
+    tx = added[0]
+    assert tx.type == "BUY"
+    assert tx.source == "PDF"
+    assert tx.external_uuid == "pdf:report.pdf:0"
+    assert tx.shares == Decimal("5")
 
 
 @pytest.mark.asyncio
-async def test_import_from_holdings_increases_existing_holding() -> None:
+async def test_import_from_holdings_is_idempotent_on_reimport() -> None:
+    """Re-running the same PDF skips the insert (uuid already exists)."""
     from app.services.import_service import ImportService
 
-    stock = MagicMock()
-    stock.id = 2
-
-    holding = MagicMock()
-    holding.quantity = Decimal("10")
-
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = stock
-
-    holding_result = MagicMock()
-    holding_result.scalar_one_or_none.return_value = holding
-
-    db = AsyncMock()
-    db.add = MagicMock()
-    db.execute = AsyncMock(side_effect=[stock_result, holding_result])
+    db = _stub_pdf_db(
+        known_tickers={"MSFT": 2},
+        existing_uuids={"pdf:report.pdf:0"},
+    )
 
     service = ImportService()
-    result = await service.import_from_holdings([("MSFT", Decimal("3"))], db)
+    result = await service.import_from_holdings(
+        [("MSFT", Decimal("3"))], db, source_file="report.pdf"
+    )
 
     assert result == [("MSFT", Decimal("3"))]
-    assert holding.quantity == Decimal("13")
-    db.add.assert_not_called()
+    added_tx = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert added_tx == []  # nothing inserted on second run
 
 
 @pytest.mark.asyncio
@@ -233,5 +277,5 @@ async def test_import_from_pdf_delegates_to_import_from_holdings() -> None:
     ) as mock_inner:
         result = await service.import_from_pdf(Path("/fake.pdf"), parser, db)
 
-    mock_inner.assert_called_once_with(pairs, db)
+    mock_inner.assert_called_once_with(pairs, db, source_file="fake.pdf")
     assert result == pairs

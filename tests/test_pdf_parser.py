@@ -53,39 +53,48 @@ def test_generic_parser_ignores_header_row() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_stock(ticker: str, stock_id: int = 1) -> MagicMock:
-    stock = MagicMock()
-    stock.id = stock_id
-    stock.ticker = ticker
-    return stock
-
-
-def _make_holding(stock_id: int, quantity: Decimal) -> MagicMock:
-    holding = MagicMock()
-    holding.stock_id = stock_id
-    holding.quantity = quantity
-    return holding
-
-
-def _db_with(stock: MagicMock | None, holding: MagicMock | None) -> AsyncMock:
-    """Build a minimal async DB session mock returning *stock* and *holding*."""
+def _make_db(known_tickers: dict[str, int]) -> AsyncMock:
+    """Mock DB that resolves ``known_tickers`` to Stock rows and otherwise
+    returns empty results — enough to exercise ImportService end-to-end,
+    including the recompute_holdings tail call.
+    """
     db = AsyncMock()
-    db.add = MagicMock()  # db.add is synchronous in SQLAlchemy
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    db.delete = AsyncMock()
 
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = stock
+    async def _execute(stmt):  # type: ignore[no-untyped-def]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        result = MagicMock()
 
-    holding_result = MagicMock()
-    holding_result.scalar_one_or_none.return_value = holding
+        if "external_uuid" in compiled:
+            result.scalar_one_or_none.return_value = None
+            return result
 
-    db.execute = AsyncMock(side_effect=[stock_result, holding_result])
+        if "stock.ticker" in compiled or 'stock"."ticker' in compiled:
+            ticker = next((t for t in known_tickers if f"'{t}'" in compiled), None)
+            if ticker:
+                stock = MagicMock()
+                stock.id = known_tickers[ticker]
+                stock.ticker = ticker
+                stock.currency = "EUR"
+                result.scalar_one_or_none.return_value = stock
+            else:
+                result.scalar_one_or_none.return_value = None
+            return result
+
+        result.all.return_value = []
+        result.scalars.return_value.all.return_value = []
+        result.scalar_one_or_none.return_value = None
+        return result
+
+    db.execute = AsyncMock(side_effect=_execute)
     return db
 
 
 @pytest.mark.asyncio
-async def test_import_creates_new_holding_when_none_exists() -> None:
-    stock = _make_stock("AAPL", stock_id=42)
-    db = _db_with(stock=stock, holding=None)
+async def test_import_writes_transaction_for_known_ticker() -> None:
+    db = _make_db({"AAPL": 42})
 
     parser = MagicMock()
     parser.extract.return_value = [("AAPL", Decimal("5"))]
@@ -94,35 +103,78 @@ async def test_import_creates_new_holding_when_none_exists() -> None:
     result = await service.import_from_pdf(FIXTURE_PDF, parser, db)
 
     assert result == [("AAPL", Decimal("5"))]
-    db.add.assert_called_once()
-    added: MagicMock = db.add.call_args[0][0]
-    assert added.stock_id == 42
-    assert added.quantity == Decimal("5")
+    added_tx = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert len(added_tx) == 1
+    tx = added_tx[0]
+    assert tx.stock_id == 42
+    assert tx.shares == Decimal("5")
+    assert tx.type == "BUY"
+    assert tx.source == "PDF"
 
 
 @pytest.mark.asyncio
-async def test_import_increases_existing_holding() -> None:
-    stock = _make_stock("MSFT", stock_id=7)
-    holding = _make_holding(stock_id=7, quantity=Decimal("10"))
-    db = _db_with(stock=stock, holding=holding)
+async def test_import_is_idempotent_across_two_runs() -> None:
+    """Re-importing the same PDF must not create duplicate transactions."""
+    inserted_uuids: set[str] = set()
+
+    db = AsyncMock()
+    db.flush = AsyncMock()
+    db.delete = AsyncMock()
+
+    async def _execute(stmt):  # type: ignore[no-untyped-def]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        result = MagicMock()
+
+        if "external_uuid" in compiled:
+            seen = next((u for u in inserted_uuids if u in compiled), None)
+            result.scalar_one_or_none.return_value = 1 if seen else None
+            return result
+
+        if "stock.ticker" in compiled or 'stock"."ticker' in compiled:
+            stock = MagicMock()
+            stock.id = 7
+            stock.ticker = "MSFT"
+            stock.currency = "EUR"
+            result.scalar_one_or_none.return_value = stock
+            return result
+
+        result.all.return_value = []
+        result.scalars.return_value.all.return_value = []
+        result.scalar_one_or_none.return_value = None
+        return result
+
+    def _add(obj):  # type: ignore[no-untyped-def]
+        if obj.__class__.__name__ == "Transaction":
+            inserted_uuids.add(obj.external_uuid)
+
+    db.execute = AsyncMock(side_effect=_execute)
+    db.add = MagicMock(side_effect=_add)
 
     parser = MagicMock()
     parser.extract.return_value = [("MSFT", Decimal("2.5"))]
 
     service = ImportService()
-    result = await service.import_from_pdf(FIXTURE_PDF, parser, db)
+    first = await service.import_from_pdf(FIXTURE_PDF, parser, db)
+    db.add.reset_mock()
+    second = await service.import_from_pdf(FIXTURE_PDF, parser, db)
 
-    assert result == [("MSFT", Decimal("2.5"))]
-    assert holding.quantity == Decimal("12.5")
-    db.add.assert_not_called()
+    assert first == [("MSFT", Decimal("2.5"))]
+    assert second == [("MSFT", Decimal("2.5"))]
+    added_tx_second = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert added_tx_second == []
 
 
 @pytest.mark.asyncio
 async def test_import_skips_unknown_ticker() -> None:
-    db = AsyncMock()
-    no_stock = MagicMock()
-    no_stock.scalar_one_or_none.return_value = None
-    db.execute = AsyncMock(return_value=no_stock)
+    db = _make_db({})
 
     parser = MagicMock()
     parser.extract.return_value = [("UNKNOWN", Decimal("1"))]
@@ -131,4 +183,9 @@ async def test_import_skips_unknown_ticker() -> None:
     result = await service.import_from_pdf(FIXTURE_PDF, parser, db)
 
     assert result == []
-    db.add.assert_not_called()
+    added_tx = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert added_tx == []
