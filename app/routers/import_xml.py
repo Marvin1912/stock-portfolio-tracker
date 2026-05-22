@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.database import get_async_session
 from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK
 from app.services import import_cache
@@ -84,9 +83,9 @@ async def import_xml_preview(
             {"step": "upload", "error": str(exc)},
         )
 
-    settings = get_settings()
+    openfigi_api_key = getattr(request.app.state.settings, "openfigi_api_key", "")
     resolutions = await resolve_securities(
-        result.unique_securities, openfigi_api_key=settings.openfigi_api_key
+        result.unique_securities, openfigi_api_key=openfigi_api_key
     )
 
     token = import_cache.store(
