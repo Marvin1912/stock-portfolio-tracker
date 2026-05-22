@@ -18,6 +18,7 @@ from app.models.holding import Holding
 from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK, Stock
 from app.services.fx_service import to_eur
 from app.services.openfigi_lookup import resolve_wkn
+from app.services.price_service import get_latest_close
 from app.services.stock_lookup import fetch_stock_info
 
 _SUPPORTED_QUOTES = ("EUR", "USD")
@@ -197,7 +198,6 @@ async def _create_or_attach_holding(
             name=info.name,
             currency=info.currency,
             asset_type=asset_type,
-            current_price=info.current_price,
         )
         db.add(stock)
         await db.flush()
@@ -207,9 +207,10 @@ async def _create_or_attach_holding(
     await db.flush()
     await db.refresh(holding)
 
+    latest_close = await get_latest_close(stock.ticker, db)
     current_value = (
-        qty * to_eur(stock.current_price, stock.currency)
-        if stock.current_price is not None
+        qty * to_eur(latest_close, stock.currency)
+        if latest_close is not None
         else None
     )
     row_resp = _render(
@@ -257,9 +258,10 @@ async def holding_row(
     if holding is None:
         return HTMLResponse("", status_code=404)
     stock = holding.stock
+    latest_close = await get_latest_close(stock.ticker, db)
     current_value = (
-        holding.quantity * to_eur(stock.current_price, stock.currency)
-        if stock.current_price is not None
+        holding.quantity * to_eur(latest_close, stock.currency)
+        if latest_close is not None
         else None
     )
     return _render(
@@ -347,9 +349,10 @@ async def htmx_update_holding(
     await db.flush()
     await db.refresh(holding)
     stock = holding.stock
+    latest_close = await get_latest_close(stock.ticker, db)
     current_value = (
-        qty * to_eur(stock.current_price, stock.currency)
-        if stock.current_price is not None
+        qty * to_eur(latest_close, stock.currency)
+        if latest_close is not None
         else None
     )
 

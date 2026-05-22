@@ -35,13 +35,25 @@ def _settings() -> Settings:
 
 
 def _mock_db(existing_stock: Stock | None = None) -> MagicMock:
-    """Build a mocked AsyncSession for the add-crypto code path."""
+    """Build a mocked AsyncSession for the add-crypto code path.
+
+    Dispatches queries by compiled SQL so the same mock can answer both
+    ``SELECT … FROM stock`` and ``SELECT … FROM price_cache`` (used by
+    get_latest_close after issue #100).
+    """
     db = MagicMock()
 
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = existing_stock
+    async def _execute(stmt):  # type: ignore[no-untyped-def]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        result = MagicMock()
+        if "price_cache" in compiled:
+            result.scalar_one_or_none.return_value = None
+            return result
+        # Default: stock lookup.
+        result.scalar_one_or_none.return_value = existing_stock
+        return result
 
-    db.execute = AsyncMock(return_value=stock_result)
+    db.execute = AsyncMock(side_effect=_execute)
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.refresh = AsyncMock(side_effect=lambda obj: setattr(obj, "id", 42))
@@ -97,7 +109,6 @@ async def test_add_crypto_reuses_existing_stock_without_lookup() -> None:
         name="Bitcoin EUR",
         currency="EUR",
         asset_type=ASSET_TYPE_CRYPTO,
-        current_price=Decimal("50000"),
     )
     existing.id = 3
     db = _mock_db(existing_stock=existing)
@@ -225,7 +236,6 @@ async def test_validate_crypto_hits_db_first() -> None:
         name="Bitcoin EUR",
         currency="EUR",
         asset_type=ASSET_TYPE_CRYPTO,
-        current_price=Decimal("50000"),
     )
     existing.id = 1
     db = _mock_db(existing_stock=existing)
