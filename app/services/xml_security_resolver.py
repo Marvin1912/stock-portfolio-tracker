@@ -23,7 +23,7 @@ from typing import Literal
 from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK
 from app.services.openfigi_lookup import resolve_isin
 from app.services.portfolio_performance_importer import SecurityInfo
-from app.services.stock_lookup import fetch_stock_info
+from app.services.stock_lookup import StockInfo, fetch_stock_info
 
 Status = Literal["valid", "needs_attention"]
 Source = Literal["xml", "openfigi", "crypto_pair", "manual"]
@@ -35,6 +35,57 @@ _MAX_CONCURRENT = 8
 
 def _asset_type_from_quote(qt: str | None) -> str:
     return ASSET_TYPE_CRYPTO if (qt or "").upper() == "CRYPTOCURRENCY" else ASSET_TYPE_STOCK
+
+
+def crypto_symbol_stem(ticker: str | None) -> str:
+    """Reduce a ticker to its likely base crypto symbol.
+
+    ``BTC`` → ``BTC``; ``BTC.DE`` / ``BTC.TG`` → ``BTC``;
+    ``BTC-EUR`` / ``BTC-USD`` → ``BTC``.
+    """
+    t = (ticker or "").strip().upper()
+    if not t:
+        return ""
+    if "." in t:
+        t = t.split(".", 1)[0]
+    if "-" in t:
+        head, tail = t.rsplit("-", 1)
+        if tail in _CRYPTO_QUOTES:
+            t = head
+    return t
+
+
+async def find_crypto_pair(
+    ticker: str | None, *, require_crypto: bool = False
+) -> tuple[str, StockInfo] | None:
+    """Probe Yahoo for a ``<SYM>-EUR``/``<SYM>-USD`` pair derived from *ticker*.
+
+    Returns the first hit as ``(pair_ticker, StockInfo)``. With
+    ``require_crypto=True`` only Yahoo entries whose ``quoteType`` is
+    ``CRYPTOCURRENCY`` are accepted — used by the manual STOCK→CRYPTO toggle
+    to avoid labelling an equity at e.g. ``BTC-EUR`` as crypto.
+    """
+    stem = crypto_symbol_stem(ticker)
+    if not stem or not _CRYPTO_SYMBOL_RE.match(stem):
+        return None
+
+    candidates: list[str] = []
+    raw = (ticker or "").strip().upper()
+    if "-" in raw and raw.rsplit("-", 1)[1] in _CRYPTO_QUOTES:
+        candidates.append(raw)
+    for quote in _CRYPTO_QUOTES:
+        candidate = f"{stem}-{quote}"
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        info = await fetch_stock_info(candidate)
+        if info is None:
+            continue
+        if require_crypto and (info.quote_type or "").upper() != "CRYPTOCURRENCY":
+            continue
+        return candidate, info
+    return None
 
 
 @dataclass(slots=True)
@@ -104,23 +155,18 @@ async def resolve_security(
                 )
 
     # 3) Crypto heuristic — short symbol, no ISIN.
-    if (
-        raw_ticker
-        and not security.isin
-        and _CRYPTO_SYMBOL_RE.match(raw_ticker)
-    ):
-        for quote in _CRYPTO_QUOTES:
-            candidate = f"{raw_ticker}-{quote}"
-            info = await fetch_stock_info(candidate)
-            if info:
-                return _valid(
-                    security,
-                    resolved_ticker=candidate,
-                    asset_type=_asset_type_from_quote(info.quote_type),
-                    source="crypto_pair",
-                    yahoo_name=info.name,
-                    currency=info.currency,
-                )
+    if raw_ticker and not security.isin:
+        pair = await find_crypto_pair(raw_ticker)
+        if pair is not None:
+            pair_ticker, info = pair
+            return _valid(
+                security,
+                resolved_ticker=pair_ticker,
+                asset_type=_asset_type_from_quote(info.quote_type),
+                source="crypto_pair",
+                yahoo_name=info.name,
+                currency=info.currency,
+            )
 
     return ResolvedSecurity(
         uuid=security.uuid,

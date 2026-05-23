@@ -10,6 +10,8 @@ import pytest
 from app.services.portfolio_performance_importer import SecurityInfo
 from app.services.stock_lookup import StockInfo
 from app.services.xml_security_resolver import (
+    crypto_symbol_stem,
+    find_crypto_pair,
     resolve_securities,
     resolve_security,
 )
@@ -172,6 +174,56 @@ async def test_marks_needs_attention_when_everything_fails() -> None:
     assert result.status == "needs_attention"
     assert result.resolved_ticker is None
     assert result.suggestion_source == "manual"
+
+
+def test_crypto_symbol_stem_strips_exchange_and_quote_suffixes() -> None:
+    assert crypto_symbol_stem("BTC") == "BTC"
+    assert crypto_symbol_stem("BTC.DE") == "BTC"
+    assert crypto_symbol_stem("BTC-EUR") == "BTC"
+    assert crypto_symbol_stem("doge-usd") == "DOGE"
+    assert crypto_symbol_stem(None) == ""
+
+
+@pytest.mark.asyncio
+async def test_find_crypto_pair_strict_skips_non_crypto_at_pair_address() -> None:
+    """``BTC-EUR`` happens to be valid on Yahoo as crypto — but if Yahoo ever
+    returned an equity at that address we must NOT label it CRYPTO."""
+    with patch(
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(side_effect=[_info("Some ETF", quote_type="EQUITY"), None]),
+    ):
+        result = await find_crypto_pair("BTC", require_crypto=True)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_find_crypto_pair_returns_btc_eur_for_bare_btc() -> None:
+    with patch(
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(
+            return_value=_info("Bitcoin EUR", quote_type="CRYPTOCURRENCY")
+        ),
+    ):
+        result = await find_crypto_pair("BTC", require_crypto=True)
+    assert result is not None
+    pair_ticker, info = result
+    assert pair_ticker == "BTC-EUR"
+    assert info.name == "Bitcoin EUR"
+
+
+@pytest.mark.asyncio
+async def test_find_crypto_pair_strips_exchange_suffix() -> None:
+    """``BTC.DE`` should be reduced to ``BTC`` then probed as ``BTC-EUR``."""
+    with patch(
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(
+            return_value=_info("Bitcoin EUR", quote_type="CRYPTOCURRENCY")
+        ),
+    ) as mock_fetch:
+        result = await find_crypto_pair("BTC.DE", require_crypto=True)
+    assert result is not None
+    assert result[0] == "BTC-EUR"
+    mock_fetch.assert_awaited_with("BTC-EUR")
 
 
 @pytest.mark.asyncio
