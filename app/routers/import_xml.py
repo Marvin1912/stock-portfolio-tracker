@@ -22,6 +22,8 @@ from app.services.stock_lookup import fetch_stock_info
 from app.services.transaction_import_service import TransactionImportService
 from app.services.xml_security_resolver import (
     ResolvedSecurity,
+    crypto_symbol_stem,
+    find_crypto_pair,
     resolve_securities,
 )
 
@@ -193,6 +195,39 @@ async def import_xml_resolve_row(
             yahoo_name=None,
             currency=current.currency,
         )
+    elif asset_type == ASSET_TYPE_CRYPTO:
+        # Toggling to CRYPTO triggers re-discovery: a stock ticker like ``BTC``
+        # (which Yahoo resolves to the Grayscale Bitcoin ETF) must become the
+        # actual crypto pair ``BTC-EUR``, otherwise downstream price fetches
+        # would keep returning the ETF's price.
+        pair = await find_crypto_pair(ticker, require_crypto=True)
+        if pair is not None:
+            pair_ticker, pair_info = pair
+            updated = ResolvedSecurity(
+                uuid=current.uuid,
+                original_ticker=current.original_ticker,
+                original_name=current.original_name,
+                isin=current.isin,
+                status="valid",
+                resolved_ticker=pair_ticker,
+                asset_type=ASSET_TYPE_CRYPTO,
+                suggestion_source="crypto_pair",
+                yahoo_name=pair_info.name,
+                currency=pair_info.currency or current.currency,
+            )
+        else:
+            updated = ResolvedSecurity(
+                uuid=current.uuid,
+                original_ticker=current.original_ticker,
+                original_name=current.original_name,
+                isin=current.isin,
+                status="needs_attention",
+                resolved_ticker=crypto_symbol_stem(ticker) or ticker,
+                asset_type=ASSET_TYPE_CRYPTO,
+                suggestion_source="manual",
+                yahoo_name=None,
+                currency=current.currency,
+            )
     else:
         info = await fetch_stock_info(ticker)
         if info is None:
