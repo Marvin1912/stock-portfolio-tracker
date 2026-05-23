@@ -75,7 +75,7 @@ class TransactionImportService:
         mapped_type = _PP_TYPE_MAP.get(tx.type)
         if mapped_type is None:
             summary.skipped_unsupported += 1
-            logger.info(
+            logger.debug(
                 "Skipped XML transaction %s — unsupported PP type %r (kind=%s, security=%s)",
                 tx.uuid or "?",
                 tx.type,
@@ -89,7 +89,7 @@ class TransactionImportService:
         # double-counted as a position change.
         if mapped_type in {"BUY", "SELL"} and tx.kind != "portfolio":
             summary.skipped_unsupported += 1
-            logger.info(
+            logger.debug(
                 "Skipped XML transaction %s — %s account-leg "
                 "(paired with a portfolio entry, security=%s)",
                 tx.uuid or "?",
