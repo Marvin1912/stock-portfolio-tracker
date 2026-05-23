@@ -237,9 +237,20 @@ class PortfolioPerformanceImporter:
         out: list[ParsedTransaction] = []
         seen: set[str] = set()
 
+        # A buy/sell pairs a portfolio-leg with an account-leg.  XStream writes
+        # whichever leg it reaches first as a full object under its natural
+        # collection using the hyphenated alias (``portfolio-transaction`` /
+        # ``account-transaction``); the paired leg is serialised inline inside
+        # the <crossEntry> using the camelCase BuySellEntry field name
+        # (``portfolioTransaction`` / ``accountTransaction``).  We must walk
+        # both spellings or we silently drop every leg that happens to be the
+        # inline one — e.g. a BUY whose account-leg sorts first leaves its
+        # portfolio-leg (with the share count) only as <portfolioTransaction>.
         for tag, kind in (
             ("portfolio-transaction", "portfolio"),
+            ("portfolioTransaction", "portfolio"),
             ("account-transaction", "account"),
+            ("accountTransaction", "account"),
         ):
             for tx_el in root.iter(tag):
                 if tx_el.get("reference"):
