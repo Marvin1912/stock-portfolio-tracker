@@ -15,8 +15,18 @@ from app.services.xml_security_resolver import (
 )
 
 
-def _info(name: str = "Stock", currency: str = "EUR") -> StockInfo:
-    return StockInfo(ticker="T", name=name, currency=currency, current_price=Decimal("1"))
+def _info(
+    name: str = "Stock",
+    currency: str = "EUR",
+    quote_type: str | None = "EQUITY",
+) -> StockInfo:
+    return StockInfo(
+        ticker="T",
+        name=name,
+        currency=currency,
+        current_price=Decimal("1"),
+        quote_type=quote_type,
+    )
 
 
 def _security(**overrides):  # type: ignore[no-untyped-def]
@@ -67,7 +77,12 @@ async def test_crypto_pair_heuristic_for_short_symbol_without_isin() -> None:
     sec = _security(ticker="DOGE", isin=None)
     with patch(
         "app.services.xml_security_resolver.fetch_stock_info",
-        new=AsyncMock(side_effect=[None, _info("Dogecoin EUR", currency="EUR")]),
+        new=AsyncMock(
+            side_effect=[
+                None,
+                _info("Dogecoin EUR", currency="EUR", quote_type="CRYPTOCURRENCY"),
+            ]
+        ),
     ):
         result = await resolve_security(sec)
 
@@ -83,7 +98,11 @@ async def test_crypto_tries_usd_when_eur_pair_unknown() -> None:
     with patch(
         "app.services.xml_security_resolver.fetch_stock_info",
         new=AsyncMock(
-            side_effect=[None, None, _info("IOTA USD", currency="USD")]
+            side_effect=[
+                None,
+                None,
+                _info("IOTA USD", currency="USD", quote_type="CRYPTOCURRENCY"),
+            ]
         ),
     ):
         result = await resolve_security(sec)
@@ -91,6 +110,48 @@ async def test_crypto_tries_usd_when_eur_pair_unknown() -> None:
     assert result.status == "valid"
     assert result.resolved_ticker == "IOTA-USD"
     assert result.asset_type == "CRYPTO"
+
+
+@pytest.mark.asyncio
+async def test_raw_ticker_marked_crypto_when_yahoo_says_cryptocurrency() -> None:
+    """BTC-EUR resolves via Step 1 but Yahoo's quoteType drives the classification."""
+    sec = _security(ticker="BTC-EUR", isin=None)
+    with patch(
+        "app.services.xml_security_resolver.fetch_stock_info",
+        new=AsyncMock(
+            side_effect=[_info("Bitcoin EUR", quote_type="CRYPTOCURRENCY")]
+        ),
+    ):
+        result = await resolve_security(sec)
+
+    assert result.status == "valid"
+    assert result.suggestion_source == "xml"
+    assert result.resolved_ticker == "BTC-EUR"
+    assert result.asset_type == "CRYPTO"
+
+
+@pytest.mark.asyncio
+async def test_openfigi_resolved_etp_stays_stock() -> None:
+    """A crypto ETP resolved via OpenFIGI has quoteType=EQUITY → STOCK."""
+    sec = _security(ticker=None, isin="DE000A27Z304")
+    with (
+        patch(
+            "app.services.xml_security_resolver.fetch_stock_info",
+            new=AsyncMock(
+                side_effect=[_info("BTCetc Physical Bitcoin", quote_type="EQUITY")]
+            ),
+        ),
+        patch(
+            "app.services.xml_security_resolver.resolve_isin",
+            new=AsyncMock(return_value="BTCE.DE"),
+        ),
+    ):
+        result = await resolve_security(sec, openfigi_api_key="k")
+
+    assert result.status == "valid"
+    assert result.suggestion_source == "openfigi"
+    assert result.resolved_ticker == "BTCE.DE"
+    assert result.asset_type == "STOCK"
 
 
 @pytest.mark.asyncio

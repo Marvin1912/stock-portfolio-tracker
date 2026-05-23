@@ -18,18 +18,31 @@
   </td>
   <td>
     {% if r.status == "valid" %}
-      <span class="text-mono">{{ r.resolved_ticker }}</span>
-      {% if r.yahoo_name %}
-      <span style="color: var(--muted); font-size: 0.78rem;"> · {{ r.yahoo_name }}</span>
-      {% endif %}
-      <span class="file-badge" style="margin-left: 0.4rem;">
-        {% if r.suggestion_source == "xml" %}from XML
-        {% elif r.suggestion_source == "openfigi" %}via OpenFIGI
-        {% elif r.suggestion_source == "crypto_pair" %}crypto pair
-        {% else %}manual
+      <form class="sec-fix-form"
+            hx-post="/import/xml/resolve-row"
+            hx-target="#sec-row-{{ r.uuid }}"
+            hx-swap="outerHTML"
+            hx-trigger="change from:find select"
+            style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="uuid" value="{{ r.uuid }}">
+        <input type="hidden" name="ticker" value="{{ r.resolved_ticker }}">
+        <span class="text-mono">{{ r.resolved_ticker }}</span>
+        {% if r.yahoo_name %}
+        <span style="color: var(--muted); font-size: 0.78rem;"> · {{ r.yahoo_name }}</span>
         {% endif %}
-      </span>
-      <span class="file-badge" style="margin-left: 0.25rem;">{{ r.asset_type }}</span>
+        <span class="file-badge" style="margin-left: 0.4rem;">
+          {% if r.suggestion_source == "xml" %}from XML
+          {% elif r.suggestion_source == "openfigi" %}via OpenFIGI
+          {% elif r.suggestion_source == "crypto_pair" %}crypto pair
+          {% else %}manual
+          {% endif %}
+        </span>
+        <select name="asset_type" class="input-mono" style="margin-left: 0.25rem;">
+          <option value="STOCK" {% if r.asset_type == "STOCK" %}selected{% endif %}>STOCK</option>
+          <option value="CRYPTO" {% if r.asset_type == "CRYPTO" %}selected{% endif %}>CRYPTO</option>
+        </select>
+      </form>
     {% else %}
       <form class="sec-fix-form"
             hx-post="/import/xml/resolve-row"
