@@ -306,6 +306,90 @@ def test_parser_finds_transactions_nested_in_crossentry() -> None:
     assert result.total_count == 3  # port-tx-1 (BUY), acct-tx-1 (BUY), acct-tx-2 (DEPOSIT)
 
 
+def test_parser_finds_portfolio_leg_inline_as_crossentry_field() -> None:
+    """When the account-leg sorts first, the portfolio-leg is serialised inline
+    inside <crossEntry> using the camelCase field name <portfolioTransaction>
+    (not the hyphenated <portfolio-transaction> alias).  The parser must still
+    find it, otherwise the position (and its share count) is dropped and only
+    the cash-side account-leg survives — which the importer then skips."""
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<client>
+  <version>69</version>
+  <baseCurrency>EUR</baseCurrency>
+  <securities>
+    <security>
+      <uuid>sec-eth</uuid>
+      <name>Ethereum</name>
+      <currencyCode>EUR</currencyCode>
+      <tickerSymbol>ETH</tickerSymbol>
+    </security>
+  </securities>
+  <accounts>
+    <account>
+      <uuid>acc-1</uuid>
+      <name>Cash</name>
+      <currencyCode>EUR</currencyCode>
+      <transactions>
+        <!-- Account-leg serialised first → full hyphenated element. -->
+        <account-transaction>
+          <uuid>acct-eth-1</uuid>
+          <date>2025-02-19T00:00</date>
+          <currencyCode>EUR</currencyCode>
+          <amount>50000</amount>
+          <security reference="../../../../../securities/security"/>
+          <shares>0</shares>
+          <crossEntry class="buysell">
+            <portfolio>
+              <uuid>port-1</uuid>
+              <name>Crypto</name>
+              <referenceAccount reference="../../../../.."/>
+              <transactions>
+                <!-- portfolio-leg is only a back-reference here -->
+                <portfolio-transaction reference="../../../portfolioTransaction"/>
+              </transactions>
+            </portfolio>
+            <!-- portfolio-leg serialised INLINE with the camelCase field name -->
+            <portfolioTransaction>
+              <uuid>port-eth-1</uuid>
+              <date>2025-02-19T00:00</date>
+              <currencyCode>EUR</currencyCode>
+              <amount>50000</amount>
+              <security reference="../../../../../../../securities/security"/>
+              <shares>20000000</shares>
+              <type>BUY</type>
+            </portfolioTransaction>
+            <account reference="../../../../.."/>
+            <accountTransaction reference="../.."/>
+          </crossEntry>
+          <type>BUY</type>
+        </account-transaction>
+      </transactions>
+    </account>
+  </accounts>
+  <portfolios>
+    <portfolio
+      reference="../accounts/account/transactions/account-transaction/crossEntry/portfolio"/>
+  </portfolios>
+</client>"""
+
+    result = PortfolioPerformanceImporter().parse_bytes(xml.encode())
+
+    buy_portfolio = next(
+        (t for t in result.transactions if t.type == "BUY" and t.kind == "portfolio"),
+        None,
+    )
+    assert buy_portfolio is not None, (
+        "inline <portfolioTransaction> (camelCase) portfolio-leg must be parsed"
+    )
+    assert buy_portfolio.uuid == "port-eth-1"
+    assert buy_portfolio.shares == Decimal("0.20000000")
+    assert buy_portfolio.security is not None
+    assert buy_portfolio.security.ticker == "ETH"
+
+    # Both legs are present; nothing is double-counted.
+    assert result.total_count == 2  # acct-eth-1 (account), port-eth-1 (portfolio)
+
+
 @pytest.mark.asyncio
 async def test_import_xml_post_shows_preview(client: AsyncClient) -> None:
     from decimal import Decimal
