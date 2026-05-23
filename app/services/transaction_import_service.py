@@ -90,7 +90,8 @@ class TransactionImportService:
         if mapped_type in {"BUY", "SELL"} and tx.kind != "portfolio":
             summary.skipped_unsupported += 1
             logger.info(
-                "Skipped XML transaction %s — %s account-leg (paired with a portfolio entry, security=%s)",
+                "Skipped XML transaction %s — %s account-leg "
+                "(paired with a portfolio entry, security=%s)",
                 tx.uuid or "?",
                 mapped_type,
                 _describe_security(tx.security),
@@ -128,7 +129,8 @@ class TransactionImportService:
             elif not (tx.security.ticker or "").strip():
                 reason = (
                     f"security has no ticker symbol "
-                    f"(uuid={tx.security.uuid}, name={tx.security.name!r}, isin={tx.security.isin!r})"
+                    f"(uuid={tx.security.uuid}, name={tx.security.name!r}, "
+                    f"isin={tx.security.isin!r})"
                 )
             else:
                 reason = "stock upsert failed"
