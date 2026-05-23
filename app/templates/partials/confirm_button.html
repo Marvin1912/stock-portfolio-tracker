@@ -1,4 +1,8 @@
-{# Confirm form/button — also rendered as an OOB swap from /import/xml/resolve-row. #}
+{# Confirm form/button — also rendered as an OOB swap from /import/xml/resolve-row.
+   When rendered OOB, the response is parsed in a <tbody> context (the main swap
+   target is a <tr>), which mangles a sibling <form>. Wrapping in <template>
+   lets htmx extract the form unharmed and perform the outerHTML OOB swap. #}
+{% if oob %}<template>{% endif %}
 <form id="confirm-import-form"
       method="post"
       action="/import/xml/confirm"
@@ -15,3 +19,4 @@
   </span>
   {% endif %}
 </form>
+{% if oob %}</template>{% endif %}
