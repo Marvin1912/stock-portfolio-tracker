@@ -91,6 +91,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     cfg = settings or get_settings()
 
+    # Uvicorn's default LOGGING_CONFIG only wires handlers onto the `uvicorn.*`
+    # loggers, leaving the root logger handler-less. Without this, every
+    # `logger.info(...)` in `app.*` modules is dropped at the WARNING fallback.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    # SQLAlchemy's echo=True attaches its own handler; stop propagation so
+    # statements aren't printed twice once a root handler exists.
+    logging.getLogger("sqlalchemy.engine").propagate = False
+
     app = FastAPI(
         title="Stock Portfolio Tracker",
         description=(
