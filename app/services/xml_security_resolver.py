@@ -33,6 +33,10 @@ _CRYPTO_SYMBOL_RE = re.compile(r"^[A-Z0-9]{2,6}$")
 _MAX_CONCURRENT = 8
 
 
+def _asset_type_from_quote(qt: str | None) -> str:
+    return ASSET_TYPE_CRYPTO if (qt or "").upper() == "CRYPTOCURRENCY" else ASSET_TYPE_STOCK
+
+
 @dataclass(slots=True)
 class ResolvedSecurity:
     uuid: str
@@ -78,7 +82,7 @@ async def resolve_security(
             return _valid(
                 security,
                 resolved_ticker=raw_ticker,
-                asset_type=ASSET_TYPE_STOCK,
+                asset_type=_asset_type_from_quote(info.quote_type),
                 source="xml",
                 yahoo_name=info.name,
                 currency=info.currency,
@@ -93,7 +97,7 @@ async def resolve_security(
                 return _valid(
                     security,
                     resolved_ticker=candidate.upper(),
-                    asset_type=ASSET_TYPE_STOCK,
+                    asset_type=_asset_type_from_quote(info.quote_type),
                     source="openfigi",
                     yahoo_name=info.name,
                     currency=info.currency,
@@ -112,7 +116,7 @@ async def resolve_security(
                 return _valid(
                     security,
                     resolved_ticker=candidate,
-                    asset_type=ASSET_TYPE_CRYPTO,
+                    asset_type=_asset_type_from_quote(info.quote_type),
                     source="crypto_pair",
                     yahoo_name=info.name,
                     currency=info.currency,

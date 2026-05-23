@@ -14,6 +14,7 @@ class StockInfo:
     name: str
     currency: str
     current_price: Decimal | None
+    quote_type: str | None = None
 
 
 def _fetch_stock_info_sync(ticker: str) -> StockInfo | None:
@@ -31,12 +32,15 @@ def _fetch_stock_info_sync(ticker: str) -> StockInfo | None:
     currency = info.get("currency") or "USD"
     price_raw = info.get("currentPrice") or info.get("regularMarketPrice")
     current_price = Decimal(str(price_raw)) if price_raw is not None else None
+    quote_type_raw = info.get("quoteType")
+    quote_type = str(quote_type_raw).upper() if quote_type_raw else None
 
     return StockInfo(
         ticker=ticker.upper(),
         name=name,
         currency=currency,
         current_price=current_price,
+        quote_type=quote_type,
     )
 
 
