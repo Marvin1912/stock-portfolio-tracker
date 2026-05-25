@@ -236,6 +236,39 @@ async def test_history_sell_halves_value() -> None:
 
 
 @pytest.mark.asyncio
+async def test_history_forward_fills_missing_price() -> None:
+    """A ticker missing a close on one date keeps its last value (no dip).
+
+    Both stocks are bought on day 1 and priced on days 1 and 3, but BTC-EUR
+    has no close on day 2.  Without forward-fill, day 2 would drop BTC-EUR and
+    collapse the total — the sawtooth.  Day 2 must equal days 1 and 3.
+    """
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _history_db(
+        events=[
+            (1, datetime.datetime(2025, 1, 1), "BUY", "10"),
+            (2, datetime.datetime(2025, 1, 1), "BUY", "1"),
+        ],
+        stocks={1: ("AAPL", "EUR"), 2: ("BTC-EUR", "EUR")},
+        prices={
+            day(1): {"AAPL": "100.00", "BTC-EUR": "50000.00"},
+            day(2): {"AAPL": "100.00"},  # BTC-EUR missing
+            day(3): {"AAPL": "100.00", "BTC-EUR": "50000.00"},
+        },
+    )
+
+    history = await PortfolioService().get_performance_history(db)
+
+    by_date = dict(history)
+    expected = Decimal("51000.00")  # 10*100 + 1*50000
+    assert by_date[day(1)] == expected
+    assert by_date[day(2)] == expected
+    assert by_date[day(3)] == expected
+
+
+@pytest.mark.asyncio
 async def test_history_returns_empty_when_no_position_events() -> None:
     db = _history_db(events=[], stocks={}, prices={})
 

@@ -155,6 +155,13 @@ class PortfolioService:
         positions: dict[int, Decimal] = {sid: Decimal("0") for sid in stock_ids}
         event_ptrs: dict[int, int] = {sid: 0 for sid in stock_ids}
 
+        # Carry each ticker's most recent close forward.  Holdings have
+        # different date coverage in the cache (different exchange calendars,
+        # plus crypto trading on weekends), so without forward-fill a date
+        # where some ticker lacks a close would drop that position from the
+        # total — producing a sawtooth.  See issue with the Performance chart.
+        last_price: dict[str, Decimal] = {}
+
         performance: list[tuple[datetime.date, Decimal]] = []
         for date in sorted(prices_by_date):
             for sid, events in events_by_stock.items():
@@ -164,14 +171,17 @@ class PortfolioService:
                     ptr += 1
                 event_ptrs[sid] = ptr
 
-            day_prices = prices_by_date[date]
+            for tkr, close in prices_by_date[date].items():
+                last_price[tkr] = close
+
             total = Decimal("0")
             for sid, qty in positions.items():
                 if qty == 0:
                     continue
                 ticker, currency = stock_info[sid]
-                price = day_prices.get(ticker)
+                price = last_price.get(ticker)
                 if price is None:
+                    # Ticker has no cached close yet — value genuinely unknown.
                     continue
                 total += qty * to_eur(price, currency)
 
