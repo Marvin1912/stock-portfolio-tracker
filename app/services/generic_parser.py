@@ -6,9 +6,8 @@ import re
 from decimal import Decimal
 from pathlib import Path
 
-import pdfplumber
-
 from app.services.pdf_parser import BaseBrokerParser
+from app.services.pdf_text import extract_pages_fast, extract_pages_robust
 
 # Matches lines like "AAPL 10.00000000" – a single all-caps ticker followed by
 # a decimal (or integer) quantity.
@@ -27,14 +26,23 @@ class GenericTableParser(BaseBrokerParser):
     """
 
     def extract(self, pdf_path: Path) -> list[tuple[str, Decimal]]:
+        # pypdf is fast but lower-fidelity on tables; if it finds no rows we
+        # retry with pdfplumber before giving up. The previewed rows are shown
+        # for confirmation before import, so a fast-path miss is recoverable.
+        try:
+            results = self._parse_pages(extract_pages_fast(pdf_path))
+        except Exception:  # noqa: BLE001 - pypdf failed; let pdfplumber try.
+            results = []
+        if results:
+            return results
+        return self._parse_pages(extract_pages_robust(pdf_path))
+
+    @staticmethod
+    def _parse_pages(pages: list[str]) -> list[tuple[str, Decimal]]:
         results: list[tuple[str, Decimal]] = []
-        with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text() or ""
-                for line in text.splitlines():
-                    m = _ROW_RE.match(line.strip())
-                    if m:
-                        ticker = m.group(1).upper()
-                        quantity = Decimal(m.group(2))
-                        results.append((ticker, quantity))
+        for text in pages:
+            for line in text.splitlines():
+                m = _ROW_RE.match(line.strip())
+                if m:
+                    results.append((m.group(1).upper(), Decimal(m.group(2))))
         return results
