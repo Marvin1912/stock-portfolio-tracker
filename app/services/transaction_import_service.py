@@ -57,8 +57,15 @@ class TransactionImportService:
     ) -> ImportSummary:
         summary = ImportSummary()
 
+        # external_uuids already added in this run. The DB-level check below
+        # cannot see them yet because the session is autoflush=False, so two
+        # rows in the same XML that derive the same comdirect key (e.g. a shared
+        # Ordernummer) would both pass the "not existing" check and then collide
+        # on uq_transaction_external_uuid in the bulk flush.
+        seen_uuids: set[str] = set()
+
         for tx in result.transactions:
-            if not await self._persist(tx, db, summary):
+            if not await self._persist(tx, db, summary, seen_uuids):
                 continue
 
         await db.flush()
@@ -75,6 +82,7 @@ class TransactionImportService:
         tx: ParsedTransaction,
         db: AsyncSession,
         summary: ImportSummary,
+        seen_uuids: set[str],
     ) -> bool:
         mapped_type = _PP_TYPE_MAP.get(tx.type)
         if mapped_type is None:
@@ -118,6 +126,10 @@ class TransactionImportService:
         # their PP uuid, which is stable across XML re-imports.
         ref = parse_comdirect_order_ref(tx.note)
         external_uuid = build_comdirect_external_uuid(ref) if ref else tx.uuid
+
+        if external_uuid in seen_uuids:
+            summary.skipped_existing += 1
+            return False
 
         existing = await db.execute(
             select(Transaction.id).where(Transaction.external_uuid == external_uuid)
@@ -168,6 +180,7 @@ class TransactionImportService:
                 source=TX_SOURCE_XML,
             )
         )
+        seen_uuids.add(external_uuid)
         summary.created += 1
         if stock_id is not None:
             assert summary.affected_stock_ids is not None
