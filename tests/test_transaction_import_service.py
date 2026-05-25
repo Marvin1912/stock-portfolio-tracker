@@ -313,6 +313,30 @@ async def test_xml_skipped_when_pdf_already_imported() -> None:
 
 
 @pytest.mark.asyncio
+async def test_duplicate_within_same_batch_is_skipped() -> None:
+    """Two rows in one XML sharing a comdirect key must not both insert.
+
+    The session is autoflush=False, so the DB duplicate check cannot see a row
+    added earlier in the same run. Without batch-local dedup both rows reach the
+    flush and collide on uq_transaction_external_uuid.
+    """
+    db = _make_db(existing_tickers={"CBK.DE": 1})
+    note = "Ord.-Nr.: 000286017243-001 | R.-Nr.: 1234567890"
+    result = _result(
+        [
+            _tx(uuid="pp-a", type="BUY", note=note),
+            _tx(uuid="pp-b", type="BUY", note=note),
+        ]
+    )
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 1
+    assert summary.skipped_existing == 1
+    assert _added_tx(db).external_uuid == "pdf:comdirect:000286017243-001"
+
+
+@pytest.mark.asyncio
 async def test_non_comdirect_note_falls_back_to_pp_uuid() -> None:
     db = _make_db(existing_tickers={"CBK.DE": 1})
     result = _result(
