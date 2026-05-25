@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.services import comdirect_parser as cp_mod
 from app.services.comdirect_parser import ComdirectParser, ParsedTrade
 from app.services.import_service import ImportService
 
@@ -105,6 +106,61 @@ def test_parse_text_handles_thousands_separator() -> None:
 
 def test_parse_text_returns_none_for_non_comdirect() -> None:
     assert ComdirectParser().parse_text("AAPL 10.0\nMSFT 5.5") is None
+
+
+# ---------------------------------------------------------------------------
+# extract_trade – fast (pypdf) path with pdfplumber fallback
+# ---------------------------------------------------------------------------
+
+
+def test_extract_trade_uses_fast_path_without_pdfplumber(monkeypatch) -> None:
+    """When pypdf yields parseable text, pdfplumber must not run."""
+    fast = MagicMock(return_value=[KAUF_TEXT])
+    robust = MagicMock(side_effect=AssertionError("pdfplumber should not be called"))
+    monkeypatch.setattr(cp_mod, "extract_pages_fast", fast)
+    monkeypatch.setattr(cp_mod, "extract_pages_robust", robust)
+
+    trade = ComdirectParser().extract_trade(Path("ignored.pdf"))
+
+    assert trade is not None and trade.wkn == "A1XB5U"
+    fast.assert_called_once()
+
+
+def test_extract_trade_falls_back_when_fast_text_unparseable(monkeypatch) -> None:
+    """comdirect-looking text that lacks the fields triggers the pdfplumber retry."""
+    partial = "Wertpapierkauf\nIhre comdirect\n"  # matches() True, no fields
+    fast = MagicMock(return_value=[partial])
+    robust = MagicMock(return_value=[KAUF_TEXT])
+    monkeypatch.setattr(cp_mod, "extract_pages_fast", fast)
+    monkeypatch.setattr(cp_mod, "extract_pages_robust", robust)
+
+    trade = ComdirectParser().extract_trade(Path("ignored.pdf"))
+
+    assert trade is not None and trade.wkn == "A1XB5U"
+    robust.assert_called_once()
+
+
+def test_extract_trade_skips_fallback_for_non_comdirect(monkeypatch) -> None:
+    """A non-comdirect PDF must not pay the slow pdfplumber path."""
+    fast = MagicMock(return_value=["AAPL 10.0\nMSFT 5.5"])
+    robust = MagicMock(side_effect=AssertionError("pdfplumber should not be called"))
+    monkeypatch.setattr(cp_mod, "extract_pages_fast", fast)
+    monkeypatch.setattr(cp_mod, "extract_pages_robust", robust)
+
+    assert ComdirectParser().extract_trade(Path("ignored.pdf")) is None
+
+
+def test_extract_trade_falls_back_when_pypdf_raises(monkeypatch) -> None:
+    """If pypdf errors out, pdfplumber still produces the trade."""
+    fast = MagicMock(side_effect=RuntimeError("corrupt stream"))
+    robust = MagicMock(return_value=[KAUF_TEXT])
+    monkeypatch.setattr(cp_mod, "extract_pages_fast", fast)
+    monkeypatch.setattr(cp_mod, "extract_pages_robust", robust)
+
+    trade = ComdirectParser().extract_trade(Path("ignored.pdf"))
+
+    assert trade is not None and trade.wkn == "A1XB5U"
+    robust.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

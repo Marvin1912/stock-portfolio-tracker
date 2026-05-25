@@ -15,14 +15,16 @@ time, mirroring the XML import flow.
 from __future__ import annotations
 
 import datetime
+import logging
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-import pdfplumber
-
 from app.models.transaction import TX_TYPE_BUY, TX_TYPE_SELL
+from app.services.pdf_text import extract_pages_fast, extract_pages_robust
+
+logger = logging.getLogger(__name__)
 
 # An ISIN is two country letters, nine alphanumerics, and a check digit.
 _ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
@@ -91,10 +93,27 @@ class ComdirectParser:
         return "wertpapierkauf" in lowered or "wertpapierverkauf" in lowered
 
     def extract_trade(self, pdf_path: Path) -> ParsedTrade | None:
-        """Read *pdf_path* and parse the contained trade, or None if absent."""
-        with pdfplumber.open(pdf_path) as pdf:
-            pages = [page.extract_text() or "" for page in pdf.pages]
-        text = "\n".join(pages)
+        """Read *pdf_path* and parse the contained trade, or None if absent.
+
+        Extraction uses pypdf first (fast); pdfplumber — which is an order of
+        magnitude slower on dense settlement PDFs — is used only as a fallback
+        when the document *looks* like a comdirect statement but the fast text
+        didn't yield the required fields. Documents that aren't comdirect at
+        all never pay the slow path. See :mod:`app.services.pdf_text`.
+        """
+        try:
+            text = "\n".join(extract_pages_fast(pdf_path))
+        except Exception:  # noqa: BLE001 - pypdf failed; let pdfplumber try.
+            logger.warning("pypdf extraction failed; falling back to pdfplumber")
+            text = ""
+
+        trade = self.parse_text(text) if text else None
+        if trade is not None:
+            return trade
+        if text and not self.matches(text):
+            return None  # definitively not a comdirect doc — skip slow retry.
+
+        text = "\n".join(extract_pages_robust(pdf_path))
         return self.parse_text(text)
 
     def parse_text(self, text: str) -> ParsedTrade | None:
