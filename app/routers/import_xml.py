@@ -8,16 +8,18 @@ from xml.etree.ElementTree import ParseError
 from fastapi import APIRouter, Depends, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
-from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK
+from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK, Stock
 from app.services import import_cache
 from app.services.holdings_service import recompute_holdings
 from app.services.portfolio_performance_importer import (
     ParseResult,
     PortfolioPerformanceImporter,
 )
+from app.services.price_service import ensure_prices_cached
 from app.services.stock_lookup import fetch_stock_info
 from app.services.transaction_import_service import TransactionImportService
 from app.services.xml_security_resolver import (
@@ -143,6 +145,10 @@ async def import_xml_confirm(
 
     if summary.affected_stock_ids:
         await recompute_holdings(db, summary.affected_stock_ids)
+        ticker_rows = await db.execute(
+            select(Stock.ticker).where(Stock.id.in_(summary.affected_stock_ids))
+        )
+        await ensure_prices_cached(list(ticker_rows.scalars().all()), db)
 
     import_cache.delete(token)
 

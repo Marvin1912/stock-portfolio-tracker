@@ -217,9 +217,13 @@ async def test_import_from_holdings_inserts_transaction() -> None:
     db = _stub_pdf_db(known_tickers={"AAPL": 1})
 
     service = ImportService()
-    result = await service.import_from_holdings(
-        [("AAPL", Decimal("5"))], db, source_file="report.pdf"
-    )
+    with patch(
+        "app.services.import_service.ensure_prices_cached",
+        new=AsyncMock(return_value=[]),
+    ):
+        result = await service.import_from_holdings(
+            [("AAPL", Decimal("5"))], db, source_file="report.pdf"
+        )
 
     assert result == [("AAPL", Decimal("5"))]
     added = [
@@ -246,9 +250,13 @@ async def test_import_from_holdings_is_idempotent_on_reimport() -> None:
     )
 
     service = ImportService()
-    result = await service.import_from_holdings(
-        [("MSFT", Decimal("3"))], db, source_file="report.pdf"
-    )
+    with patch(
+        "app.services.import_service.ensure_prices_cached",
+        new=AsyncMock(return_value=[]),
+    ):
+        result = await service.import_from_holdings(
+            [("MSFT", Decimal("3"))], db, source_file="report.pdf"
+        )
 
     assert result == [("MSFT", Decimal("3"))]
     added_tx = [
@@ -257,6 +265,28 @@ async def test_import_from_holdings_is_idempotent_on_reimport() -> None:
         if call.args[0].__class__.__name__ == "Transaction"
     ]
     assert added_tx == []  # nothing inserted on second run
+
+
+@pytest.mark.asyncio
+async def test_import_from_holdings_caches_prices_for_imported_tickers() -> None:
+    """A freshly imported ticker triggers a price-cache warmup so it shows a
+    value immediately instead of waiting for the daily scheduler."""
+    from app.services.import_service import ImportService
+
+    db = _stub_pdf_db(known_tickers={"AAPL": 1})
+
+    service = ImportService()
+    with patch(
+        "app.services.import_service.ensure_prices_cached",
+        new=AsyncMock(return_value=["AAPL"]),
+    ) as mock_ensure:
+        await service.import_from_holdings(
+            [("AAPL", Decimal("5"))], db, source_file="report.pdf"
+        )
+
+    mock_ensure.assert_awaited_once()
+    tickers = mock_ensure.call_args.args[0]
+    assert set(tickers) == {"AAPL"}
 
 
 @pytest.mark.asyncio

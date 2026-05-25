@@ -5,13 +5,24 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services import comdirect_parser as cp_mod
 from app.services.comdirect_parser import ComdirectParser, ParsedTrade
 from app.services.import_service import ImportService
+
+
+@pytest.fixture(autouse=True)
+def _stub_price_warmup():
+    """Keep import_trade unit tests offline: the post-import price-cache warmup
+    would otherwise call yfinance for each freshly created ticker."""
+    with patch(
+        "app.services.import_service.ensure_prices_cached",
+        new=AsyncMock(return_value=[]),
+    ):
+        yield
 
 FIXTURE_PDF = Path(__file__).parent / "fixtures" / "sample_comdirect_kauf.pdf"
 
@@ -263,6 +274,22 @@ async def test_import_trade_writes_full_transaction() -> None:
     assert tx.source == "PDF"
     assert tx.date == datetime.datetime(2026, 3, 23, tzinfo=datetime.UTC)
     assert tx.external_uuid == "pdf:comdirect:000512215771-001"
+
+
+@pytest.mark.asyncio
+async def test_import_trade_warms_price_cache_on_create() -> None:
+    """A newly created trade triggers a price-cache warmup for its ticker."""
+    db = _make_db({"XDWD.DE": 7})
+
+    with patch(
+        "app.services.import_service.ensure_prices_cached",
+        new=AsyncMock(return_value=["XDWD.DE"]),
+    ) as mock_ensure:
+        status = await ImportService().import_trade(_trade(), "XDWD.DE", db)
+
+    assert status == "created"
+    mock_ensure.assert_awaited_once()
+    assert list(mock_ensure.call_args.args[0]) == ["XDWD.DE"]
 
 
 @pytest.mark.asyncio
