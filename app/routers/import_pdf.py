@@ -205,11 +205,22 @@ async def import_pdf_confirm_trade(
         order_ref=order_ref or None,
     )
 
-    created = await _service.import_trade(trade, ticker, db)
+    status = await _service.import_trade(trade, ticker, db)
 
-    processed = [(ticker, shares_dec)] if created else []
+    messages = {
+        "duplicate": (
+            f"This {trade.trade_type} of {shares_dec} {ticker} on "
+            f"{trade.date.date()} is already in your portfolio "
+            "(matched an existing transaction) — skipped to avoid a duplicate."
+        ),
+        "unknown_ticker": (
+            f"{ticker} is not tracked in your portfolio yet, so the trade was "
+            "not imported."
+        ),
+    }
+    processed = [(ticker, shares_dec)] if status == "created" else []
     return _render(
         request,
         "import_pdf.html",
-        {"step": "done", "processed": processed},
+        {"step": "done", "processed": processed, "message": messages.get(status)},
     )

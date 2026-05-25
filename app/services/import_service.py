@@ -5,8 +5,9 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import Stock
@@ -14,6 +15,8 @@ from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
 from app.services.comdirect_parser import ParsedTrade
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
+
+TradeImportStatus = Literal["created", "duplicate", "unknown_ticker"]
 
 
 class ImportService:
@@ -96,50 +99,88 @@ class ImportService:
         db: AsyncSession,
         *,
         source_file: str = "comdirect",
-    ) -> bool:
+    ) -> TradeImportStatus:
         """Persist a single comdirect trade as a full BUY/SELL transaction.
 
         The security must already be tracked under *ticker* (resolved from the
         PDF's WKN/ISIN); unknown tickers are skipped, mirroring
         :meth:`import_from_holdings`.  The transaction captures the gross value,
-        fees, taxes and the real trade date.  Idempotency keys on the PDF's
-        Ordernummer so re-importing the same statement is a no-op.
+        fees, taxes and the real trade date.
 
-        Returns True when a new transaction was inserted, False when the trade
-        was skipped (unknown ticker) or already present.
+        Duplicate protection runs across *all* sources, not just prior PDF
+        imports: the same purchase may already be in the database from a
+        Portfolio Performance XML import (under a different ``external_uuid``).
+        A trade is treated as already imported when a transaction for the same
+        stock, type and share count exists on the same calendar day — see
+        :meth:`_find_duplicate_trade`.
+
+        Returns ``"created"`` when a new transaction was inserted,
+        ``"duplicate"`` when a matching one already exists, or
+        ``"unknown_ticker"`` when the security is not tracked.
         """
         stock = await self._get_stock(db, ticker)
         if stock is None:
-            return False
+            return "unknown_ticker"
+
+        if await self._find_duplicate_trade(db, stock.id, trade):
+            return "duplicate"
 
         ref = trade.order_ref or f"{trade.isin or trade.wkn}:{trade.date.date()}"
-        external_uuid = f"pdf:comdirect:{ref}"
+        db.add(
+            Transaction(
+                external_uuid=f"pdf:comdirect:{ref}",
+                stock_id=stock.id,
+                date=trade.date,
+                type=trade.trade_type,
+                shares=trade.shares,
+                amount=trade.amount,
+                currency=trade.currency or stock.currency,
+                fee=trade.fee,
+                tax=trade.tax,
+                note=f"Imported from {source_file}",
+                source=TX_SOURCE_PDF,
+            )
+        )
+        await db.flush()
+        await recompute_holdings(db, {stock.id})
+        return "created"
+
+    async def _find_duplicate_trade(
+        self,
+        db: AsyncSession,
+        stock_id: int,
+        trade: ParsedTrade,
+    ) -> bool:
+        """Return True if an equivalent trade already exists for *stock_id*.
+
+        Matches on stock + type + share count within the same UTC calendar day
+        as ``trade.date``.  Amount and time-of-day are deliberately excluded:
+        an XML-imported buy stores Portfolio Performance's total (gross + fees)
+        and the execution time, whereas the comdirect PDF carries the gross
+        ``Kurswert`` and only the trade date — so neither would match exactly.
+        """
+        trade_date = trade.date
+        if trade_date.tzinfo is None:
+            trade_date = trade_date.replace(tzinfo=datetime.UTC)
+        day_start = trade_date.astimezone(datetime.UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        day_end = day_start + datetime.timedelta(days=1)
 
         existing = await db.execute(
-            select(Transaction.id).where(Transaction.external_uuid == external_uuid)
-        )
-        already_present = existing.scalar_one_or_none() is not None
-
-        if not already_present:
-            db.add(
-                Transaction(
-                    external_uuid=external_uuid,
-                    stock_id=stock.id,
-                    date=trade.date,
-                    type=trade.trade_type,
-                    shares=trade.shares,
-                    amount=trade.amount,
-                    currency=trade.currency or stock.currency,
-                    fee=trade.fee,
-                    tax=trade.tax,
-                    note=f"Imported from {source_file}",
-                    source=TX_SOURCE_PDF,
+            select(Transaction.id)
+            .where(
+                and_(
+                    Transaction.stock_id == stock_id,
+                    Transaction.type == trade.trade_type,
+                    Transaction.shares == trade.shares,
+                    Transaction.date >= day_start,
+                    Transaction.date < day_end,
                 )
             )
-            await db.flush()
-
-        await recompute_holdings(db, {stock.id})
-        return not already_present
+            .limit(1)
+        )
+        return existing.scalar_one_or_none() is not None
 
     async def _get_stock(self, db: AsyncSession, ticker: str) -> Stock | None:
         result = await db.execute(

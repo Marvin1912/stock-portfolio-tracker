@@ -178,7 +178,7 @@
         <line x1="9" y1="9" x2="15" y2="15"/>
       </svg>
     </div>
-    <div class="error">No holdings were imported. Make sure the tickers exist in your portfolio.</div>
+    <div class="error">{{ message or "No holdings were imported. Make sure the tickers exist in your portfolio." }}</div>
     {% endif %}
     <div class="actions" style="justify-content: center; margin-top: 1rem;">
       <a href="/"><button type="button" class="btn-primary">Back to portfolio</button></a>

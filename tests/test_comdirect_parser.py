@@ -112,7 +112,7 @@ def test_parse_text_returns_none_for_non_comdirect() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_db(known_tickers: dict[str, int], *, uuid_exists: bool = False) -> AsyncMock:
+def _make_db(known_tickers: dict[str, int], *, duplicate_exists: bool = False) -> AsyncMock:
     db = AsyncMock()
     db.add = MagicMock()
     db.flush = AsyncMock()
@@ -122,8 +122,10 @@ def _make_db(known_tickers: dict[str, int], *, uuid_exists: bool = False) -> Asy
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
         result = MagicMock()
 
-        if "external_uuid" in compiled:
-            result.scalar_one_or_none.return_value = 1 if uuid_exists else None
+        # The cross-source duplicate probe is the only query that filters on
+        # transaction.date — distinguish it from the recompute_holdings queries.
+        if "transaction.date" in compiled or 'transaction"."date"' in compiled:
+            result.scalar_one_or_none.return_value = 99 if duplicate_exists else None
             return result
 
         if "stock.ticker" in compiled or 'stock"."ticker' in compiled:
@@ -168,9 +170,9 @@ def _trade() -> ParsedTrade:
 async def test_import_trade_writes_full_transaction() -> None:
     db = _make_db({"XDWD.DE": 7})
 
-    created = await ImportService().import_trade(_trade(), "XDWD.DE", db)
+    status = await ImportService().import_trade(_trade(), "XDWD.DE", db)
 
-    assert created is True
+    assert status == "created"
     added = [
         c.args[0]
         for c in db.add.call_args_list
@@ -193,9 +195,9 @@ async def test_import_trade_writes_full_transaction() -> None:
 async def test_import_trade_skips_unknown_ticker() -> None:
     db = _make_db({})
 
-    created = await ImportService().import_trade(_trade(), "UNKNOWN", db)
+    status = await ImportService().import_trade(_trade(), "UNKNOWN", db)
 
-    assert created is False
+    assert status == "unknown_ticker"
     added = [
         c.args[0]
         for c in db.add.call_args_list
@@ -205,12 +207,13 @@ async def test_import_trade_skips_unknown_ticker() -> None:
 
 
 @pytest.mark.asyncio
-async def test_import_trade_is_idempotent() -> None:
-    db = _make_db({"XDWD.DE": 7}, uuid_exists=True)
+async def test_import_trade_skips_cross_source_duplicate() -> None:
+    """A trade already in the DB (e.g. from XML) must not be re-inserted."""
+    db = _make_db({"XDWD.DE": 7}, duplicate_exists=True)
 
-    created = await ImportService().import_trade(_trade(), "XDWD.DE", db)
+    status = await ImportService().import_trade(_trade(), "XDWD.DE", db)
 
-    assert created is False
+    assert status == "duplicate"
     added = [
         c.args[0]
         for c in db.add.call_args_list
