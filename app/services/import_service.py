@@ -16,6 +16,7 @@ from app.services.comdirect_parser import ParsedTrade
 from app.services.comdirect_ref import build_comdirect_external_uuid
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
+from app.services.price_service import ensure_prices_cached
 
 TradeImportStatus = Literal["created", "duplicate", "unknown_ticker"]
 
@@ -52,6 +53,7 @@ class ImportService:
         """Insert a transaction per pair, then rebuild the holding snapshot."""
         processed: list[tuple[str, Decimal]] = []
         affected_stock_ids: set[int] = set()
+        affected_tickers: set[str] = set()
         now = datetime.datetime.now(datetime.UTC)
 
         for idx, (ticker, qty) in enumerate(pairs):
@@ -68,6 +70,7 @@ class ImportService:
             if existing.scalar_one_or_none() is not None:
                 processed.append((ticker, qty))
                 affected_stock_ids.add(stock.id)
+                affected_tickers.add(stock.ticker)
                 continue
 
             db.add(
@@ -87,10 +90,12 @@ class ImportService:
             )
             processed.append((ticker, qty))
             affected_stock_ids.add(stock.id)
+            affected_tickers.add(stock.ticker)
 
         await db.flush()
         if affected_stock_ids:
             await recompute_holdings(db, affected_stock_ids)
+            await ensure_prices_cached(affected_tickers, db)
         return processed
 
     async def import_trade(
@@ -161,6 +166,7 @@ class ImportService:
         )
         await db.flush()
         await recompute_holdings(db, {stock.id})
+        await ensure_prices_cached([stock.ticker], db)
         return "created"
 
     async def _find_duplicate_trade(
