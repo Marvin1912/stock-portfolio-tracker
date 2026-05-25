@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.stock import Stock
 from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
 from app.services.comdirect_parser import ParsedTrade
+from app.services.comdirect_ref import build_comdirect_external_uuid
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
 
@@ -109,9 +110,13 @@ class ImportService:
 
         Duplicate protection runs across *all* sources, not just prior PDF
         imports: the same purchase may already be in the database from a
-        Portfolio Performance XML import (under a different ``external_uuid``).
-        A trade is treated as already imported when a transaction for the same
-        stock, type and share count exists on the same calendar day — see
+        Portfolio Performance XML import. When the trade carries a comdirect
+        ``order_ref`` we build the shared ``pdf:comdirect:{ref}`` key (the same
+        one the XML importer derives from the note's *Ordernummer*) and look it
+        up exactly — so an XML-first then PDF-second import dedupes
+        deterministically without tripping the unique constraint, and two
+        genuinely distinct same-day trades keep distinct keys. Only when no
+        order ref is available do we fall back to the fuzzy same-day probe in
         :meth:`_find_duplicate_trade`.
 
         Returns ``"created"`` when a new transaction was inserted,
@@ -122,13 +127,26 @@ class ImportService:
         if stock is None:
             return "unknown_ticker"
 
-        if await self._find_duplicate_trade(db, stock.id, trade):
-            return "duplicate"
+        if trade.order_ref:
+            external_uuid = build_comdirect_external_uuid(trade.order_ref)
+            existing = await db.execute(
+                select(Transaction.id).where(
+                    Transaction.external_uuid == external_uuid
+                )
+            )
+            if existing.scalar_one_or_none() is not None:
+                return "duplicate"
+        else:
+            # No stable order reference — fall back to the fuzzy same-day probe.
+            if await self._find_duplicate_trade(db, stock.id, trade):
+                return "duplicate"
+            external_uuid = build_comdirect_external_uuid(
+                f"{trade.isin or trade.wkn}:{trade.date.date()}"
+            )
 
-        ref = trade.order_ref or f"{trade.isin or trade.wkn}:{trade.date.date()}"
         db.add(
             Transaction(
-                external_uuid=f"pdf:comdirect:{ref}",
+                external_uuid=external_uuid,
                 stock_id=stock.id,
                 date=trade.date,
                 type=trade.trade_type,

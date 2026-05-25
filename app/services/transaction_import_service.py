@@ -10,6 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import ASSET_TYPE_STOCK, Stock
 from app.models.transaction import TX_SOURCE_XML, Transaction
+from app.services.comdirect_ref import (
+    build_comdirect_external_uuid,
+    parse_comdirect_order_ref,
+)
 from app.services.portfolio_performance_importer import (
     ParsedTransaction,
     ParseResult,
@@ -108,8 +112,15 @@ class TransactionImportService:
             )
             return False
 
+        # Prefer the cross-source comdirect key (derived from the Ordernummer in
+        # the note) over PP's random per-export uuid, so an XML row dedupes
+        # against a prior PDF import of the same trade. Non-comdirect rows keep
+        # their PP uuid, which is stable across XML re-imports.
+        ref = parse_comdirect_order_ref(tx.note)
+        external_uuid = build_comdirect_external_uuid(ref) if ref else tx.uuid
+
         existing = await db.execute(
-            select(Transaction.id).where(Transaction.external_uuid == tx.uuid)
+            select(Transaction.id).where(Transaction.external_uuid == external_uuid)
         )
         if existing.scalar_one_or_none() is not None:
             summary.skipped_existing += 1
@@ -144,7 +155,7 @@ class TransactionImportService:
 
         db.add(
             Transaction(
-                external_uuid=tx.uuid,
+                external_uuid=external_uuid,
                 stock_id=stock_id,
                 date=tx.date,
                 type=mapped_type,

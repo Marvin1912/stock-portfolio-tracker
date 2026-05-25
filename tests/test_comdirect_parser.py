@@ -112,7 +112,13 @@ def test_parse_text_returns_none_for_non_comdirect() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_db(known_tickers: dict[str, int], *, duplicate_exists: bool = False) -> AsyncMock:
+def _make_db(
+    known_tickers: dict[str, int],
+    *,
+    duplicate_exists: bool = False,
+    existing_external_uuids: set[str] | None = None,
+) -> AsyncMock:
+    existing_external_uuids = existing_external_uuids or set()
     db = AsyncMock()
     db.add = MagicMock()
     db.flush = AsyncMock()
@@ -122,10 +128,18 @@ def _make_db(known_tickers: dict[str, int], *, duplicate_exists: bool = False) -
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
         result = MagicMock()
 
-        # The cross-source duplicate probe is the only query that filters on
+        # The fuzzy fallback probe is the only query that filters on
         # transaction.date — distinguish it from the recompute_holdings queries.
         if "transaction.date" in compiled or 'transaction"."date"' in compiled:
             result.scalar_one_or_none.return_value = 99 if duplicate_exists else None
+            return result
+
+        # Exact external_uuid lookup — the order-ref dedupe (issue #114).
+        if "external_uuid" in compiled:
+            found = next(
+                (u for u in existing_external_uuids if u in compiled), None
+            )
+            result.scalar_one_or_none.return_value = 1 if found else None
             return result
 
         if "stock.ticker" in compiled or 'stock"."ticker' in compiled:
@@ -149,20 +163,24 @@ def _make_db(known_tickers: dict[str, int], *, duplicate_exists: bool = False) -
     return db
 
 
-def _trade() -> ParsedTrade:
+def _trade(
+    *,
+    order_ref: str | None = "000512215771-001",
+    shares: str = "8",
+) -> ParsedTrade:
     return ParsedTrade(
         trade_type="BUY",
         name="Xtr.(IE) - MSCI World",
         wkn="A1XB5U",
         isin="IE00BJ0KDQ92",
-        shares=Decimal("8"),
+        shares=Decimal(shares),
         price=Decimal("117.5406"),
         amount=Decimal("940.32"),
         fee=Decimal("15.30"),
         tax=Decimal("0"),
         currency="EUR",
         date=datetime.datetime(2026, 3, 23, tzinfo=datetime.UTC),
-        order_ref="000512215771-001",
+        order_ref=order_ref,
     )
 
 
@@ -207,11 +225,60 @@ async def test_import_trade_skips_unknown_ticker() -> None:
 
 
 @pytest.mark.asyncio
-async def test_import_trade_skips_cross_source_duplicate() -> None:
-    """A trade already in the DB (e.g. from XML) must not be re-inserted."""
-    db = _make_db({"XDWD.DE": 7}, duplicate_exists=True)
+async def test_import_trade_skips_cross_source_duplicate_by_exact_key() -> None:
+    """A trade already imported from XML under the shared comdirect key must not
+    be re-inserted — the exact ``pdf:comdirect:{ref}`` lookup catches it, so no
+    IntegrityError on the unique constraint (issue #114)."""
+    db = _make_db(
+        {"XDWD.DE": 7},
+        existing_external_uuids={"pdf:comdirect:000512215771-001"},
+    )
 
     status = await ImportService().import_trade(_trade(), "XDWD.DE", db)
+
+    assert status == "duplicate"
+    added = [
+        c.args[0]
+        for c in db.add.call_args_list
+        if c.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert added == []
+
+
+@pytest.mark.asyncio
+async def test_import_trade_distinct_order_refs_both_insert() -> None:
+    """Two distinct same-day, same-share comdirect trades with *different*
+    order refs both get distinct keys and both insert (issue #114)."""
+    db = _make_db({"XDWD.DE": 7})
+
+    first = await ImportService().import_trade(
+        _trade(order_ref="000512215771-001"), "XDWD.DE", db
+    )
+    second = await ImportService().import_trade(
+        _trade(order_ref="000512215771-002"), "XDWD.DE", db
+    )
+
+    assert first == "created"
+    assert second == "created"
+    keys = {
+        c.args[0].external_uuid
+        for c in db.add.call_args_list
+        if c.args[0].__class__.__name__ == "Transaction"
+    }
+    assert keys == {
+        "pdf:comdirect:000512215771-001",
+        "pdf:comdirect:000512215771-002",
+    }
+
+
+@pytest.mark.asyncio
+async def test_import_trade_without_order_ref_uses_fuzzy_fallback() -> None:
+    """A ref-less trade still dedupes via the fuzzy same-day probe."""
+    db = _make_db({"XDWD.DE": 7}, duplicate_exists=True)
+
+    status = await ImportService().import_trade(
+        _trade(order_ref=None), "XDWD.DE", db
+    )
 
     assert status == "duplicate"
     added = [

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.transaction import Transaction
 from app.services.portfolio_performance_importer import (
     ParsedTransaction,
     ParseResult,
@@ -38,6 +40,7 @@ def _tx(
     shares: str = "1",
     amount: str = "100",
     currency: str = "EUR",
+    note: str | None = None,
     security: SecurityInfo | None | object = _DEFAULT,
     units: list[Unit] | None = None,
 ) -> ParsedTransaction:
@@ -52,7 +55,7 @@ def _tx(
         amount=Decimal(amount),
         currency=currency,
         shares=Decimal(shares),
-        note=None,
+        note=note,
         security=sec,
         units=units or [],
     )
@@ -262,6 +265,78 @@ async def test_asset_type_from_security_is_propagated_to_stock() -> None:
     ]
     assert len(inserted_stocks) == 1
     assert inserted_stocks[0].asset_type == "CRYPTO"
+
+
+# ---------------------------------------------------------------------------
+# Cross-source comdirect keying — derive the shared key from the PP note (#113)
+# ---------------------------------------------------------------------------
+
+
+def _added_tx(db: AsyncMock) -> Transaction:
+    tx = next(
+        call.args[0]
+        for call in db.add.call_args_list
+        if call.args[0].__class__.__name__ == "Transaction"
+    )
+    return cast(Transaction, tx)
+
+
+@pytest.mark.asyncio
+async def test_comdirect_note_yields_shared_key() -> None:
+    """A comdirect PP note is keyed by the shared pdf:comdirect:{ref} key,
+    not PP's random uuid."""
+    db = _make_db(existing_tickers={"CBK.DE": 1})
+    note = "Ord.-Nr.: 072324316214-001 | R.-Nr.: 9988776655"
+    result = _result([_tx(uuid="pp-random-uuid", type="BUY", note=note)])
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 1
+    assert _added_tx(db).external_uuid == "pdf:comdirect:072324316214-001"
+
+
+@pytest.mark.asyncio
+async def test_xml_skipped_when_pdf_already_imported() -> None:
+    """An XML row imported after the matching PDF dedupes via the shared key."""
+    db = _make_db(
+        existing_uuids={"pdf:comdirect:072324316214-001"},
+        existing_tickers={"CBK.DE": 1},
+    )
+    note = "Ord.-Nr.: 072324316214-001 | R.-Nr.: 9988776655"
+    result = _result([_tx(uuid="pp-random-uuid", type="BUY", note=note)])
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 0
+    assert summary.skipped_existing == 1
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_non_comdirect_note_falls_back_to_pp_uuid() -> None:
+    db = _make_db(existing_tickers={"CBK.DE": 1})
+    result = _result(
+        [_tx(uuid="pp-uuid-x", type="BUY", note="Purchase via Sparplan")]
+    )
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 1
+    assert _added_tx(db).external_uuid == "pp-uuid-x"
+
+
+@pytest.mark.asyncio
+async def test_legacy_order_form_falls_back_to_pp_uuid() -> None:
+    """The legacy ' / '-separated Order-Nr. form has no PDF counterpart."""
+    db = _make_db(existing_tickers={"CBK.DE": 1})
+    result = _result(
+        [_tx(uuid="pp-uuid-y", type="BUY", note="Order-Nr.: 71871368321 / 001")]
+    )
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 1
+    assert _added_tx(db).external_uuid == "pp-uuid-y"
 
 
 # ---------------------------------------------------------------------------
