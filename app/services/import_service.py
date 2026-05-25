@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import Stock
 from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
+from app.services.comdirect_parser import ParsedTrade
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
 
@@ -87,6 +88,58 @@ class ImportService:
         if affected_stock_ids:
             await recompute_holdings(db, affected_stock_ids)
         return processed
+
+    async def import_trade(
+        self,
+        trade: ParsedTrade,
+        ticker: str,
+        db: AsyncSession,
+        *,
+        source_file: str = "comdirect",
+    ) -> bool:
+        """Persist a single comdirect trade as a full BUY/SELL transaction.
+
+        The security must already be tracked under *ticker* (resolved from the
+        PDF's WKN/ISIN); unknown tickers are skipped, mirroring
+        :meth:`import_from_holdings`.  The transaction captures the gross value,
+        fees, taxes and the real trade date.  Idempotency keys on the PDF's
+        Ordernummer so re-importing the same statement is a no-op.
+
+        Returns True when a new transaction was inserted, False when the trade
+        was skipped (unknown ticker) or already present.
+        """
+        stock = await self._get_stock(db, ticker)
+        if stock is None:
+            return False
+
+        ref = trade.order_ref or f"{trade.isin or trade.wkn}:{trade.date.date()}"
+        external_uuid = f"pdf:comdirect:{ref}"
+
+        existing = await db.execute(
+            select(Transaction.id).where(Transaction.external_uuid == external_uuid)
+        )
+        already_present = existing.scalar_one_or_none() is not None
+
+        if not already_present:
+            db.add(
+                Transaction(
+                    external_uuid=external_uuid,
+                    stock_id=stock.id,
+                    date=trade.date,
+                    type=trade.trade_type,
+                    shares=trade.shares,
+                    amount=trade.amount,
+                    currency=trade.currency or stock.currency,
+                    fee=trade.fee,
+                    tax=trade.tax,
+                    note=f"Imported from {source_file}",
+                    source=TX_SOURCE_PDF,
+                )
+            )
+            await db.flush()
+
+        await recompute_holdings(db, {stock.id})
+        return not already_present
 
     async def _get_stock(self, db: AsyncSession, ticker: str) -> Stock | None:
         result = await db.execute(
