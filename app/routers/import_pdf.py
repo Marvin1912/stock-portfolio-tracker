@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import tempfile
+import time
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Annotated
@@ -19,6 +21,8 @@ from app.services.comdirect_parser import ComdirectParser, ParsedTrade
 from app.services.generic_parser import GenericTableParser
 from app.services.import_service import ImportService
 from app.services.openfigi_lookup import resolve_isin, resolve_wkn
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -79,10 +83,23 @@ async def import_pdf_preview(
         tmp_path = Path(tmp.name)
 
     try:
+        t0 = time.perf_counter()
         trade = _comdirect.extract_trade(tmp_path)
+        logger.info(
+            "PDF import: comdirect parse took %.2fs (%d bytes, matched=%s)",
+            time.perf_counter() - t0,
+            len(contents),
+            trade is not None,
+        )
         if trade is not None:
             return await _preview_comdirect(request, trade)
+        t0 = time.perf_counter()
         pairs = _parser.extract(tmp_path)
+        logger.info(
+            "PDF import: generic parse took %.2fs (%d pairs)",
+            time.perf_counter() - t0,
+            len(pairs),
+        )
     except Exception:
         return _render(
             request,
@@ -110,10 +127,29 @@ async def _preview_comdirect(request: Request, trade: ParsedTrade) -> HTMLRespon
     """Resolve the WKN/ISIN to a ticker and render the rich trade preview."""
     key = getattr(getattr(request.app.state, "settings", None), "openfigi_api_key", "")
     ticker: str | None = None
+    t0 = time.perf_counter()
     if trade.wkn:
         ticker = await resolve_wkn(trade.wkn, key)
+        logger.info(
+            "PDF import: OpenFIGI resolve_wkn(%s) took %.2fs -> %s",
+            trade.wkn,
+            time.perf_counter() - t0,
+            ticker,
+        )
     if ticker is None and trade.isin:
+        t1 = time.perf_counter()
         ticker = await resolve_isin(trade.isin, key)
+        logger.info(
+            "PDF import: OpenFIGI resolve_isin(%s) took %.2fs -> %s",
+            trade.isin,
+            time.perf_counter() - t1,
+            ticker,
+        )
+    logger.info(
+        "PDF import: ticker resolution total %.2fs (api_key=%s)",
+        time.perf_counter() - t0,
+        "set" if key else "unset",
+    )
 
     return _render(
         request,
