@@ -1,0 +1,58 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 650 >>
+stream
+BT
+/F1 10 Tf
+50 770 Td
+(GESCHAEFTSABRECHNUNG VOM 23.03.2026) Tj
+0 -15 Td
+(Wertpapierkauf) Tj
+0 -15 Td
+(Geschaeftsnummer : 91 003634) Tj
+0 -15 Td
+(Ordernummer : 000512215771-001 Rechnungsnummer : 701341243997D195) Tj
+0 -15 Td
+(Geschaftstag : 23.03.2026 Ausfuehrungsplatz : TRADEGATE) Tj
+0 -15 Td
+(Wertpapier-Bezeichnung WPKNR/ISIN) Tj
+0 -15 Td
+(Xtr.\(IE\) - MSCI World A1XB5U) Tj
+0 -15 Td
+(Registered Shares 1C o.N. IE00BJ0KDQ92) Tj
+0 -15 Td
+(Nennwert Zum Kurs von) Tj
+0 -15 Td
+(St. 8 EUR 117,5406) Tj
+0 -15 Td
+(Kurswert : EUR 940,32) Tj
+0 -15 Td
+(Summe Entgelte : EUR 15,30) Tj
+0 -15 Td
+(EUR 25.03.2026 EUR 955,62) Tj
+0 -15 Td
+(Ihre comdirect) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000290 00000 n 
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+990
+%%EOF

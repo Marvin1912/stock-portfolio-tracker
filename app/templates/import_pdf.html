@@ -86,6 +86,60 @@
     </form>
   </div>
 
+  {% elif step == "preview_trade" %}
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Preview a single comdirect trade before committing                  -->
+  <!-- ------------------------------------------------------------------ -->
+  <div class="card">
+    <h2>Preview trade</h2>
+    <p class="note">
+      Review the trade extracted from the comdirect settlement below.
+      The ticker was resolved from the WKN/ISIN — adjust it if needed.
+      Confirming records a {{ trade.trade_type }} transaction; the security
+      must already be tracked in your portfolio.
+    </p>
+    {% if not ticker %}
+    <div class="error">
+      Could not resolve a ticker from WKN {{ trade.wkn }} / ISIN {{ trade.isin }}.
+      Enter the tracked ticker manually to import this trade.
+    </div>
+    {% endif %}
+    <table class="table-striped">
+      <tbody>
+        <tr><th>Security</th><td>{{ trade.name }}</td></tr>
+        <tr><th>WKN / ISIN</th><td>{{ trade.wkn }} / {{ trade.isin }}</td></tr>
+        <tr><th>Type</th><td>{{ trade.trade_type }}</td></tr>
+        <tr><th>Shares</th><td class="number">{{ trade.shares }}</td></tr>
+        <tr><th>Price</th><td class="number">{{ trade.currency }} {{ trade.price }}</td></tr>
+        <tr><th>Amount (gross)</th><td class="number">{{ trade.currency }} {{ trade.amount }}</td></tr>
+        <tr><th>Fees</th><td class="number">{{ trade.currency }} {{ trade.fee }}</td></tr>
+        <tr><th>Tax</th><td class="number">{{ trade.currency }} {{ trade.tax }}</td></tr>
+        <tr><th>Trade date</th><td>{{ trade.date.date() }}</td></tr>
+      </tbody>
+    </table>
+    <form method="post" action="/import/pdf/confirm-trade">
+      <input type="hidden" name="trade_type" value="{{ trade.trade_type }}">
+      <input type="hidden" name="shares" value="{{ trade.shares }}">
+      <input type="hidden" name="amount" value="{{ trade.amount }}">
+      <input type="hidden" name="fee" value="{{ trade.fee }}">
+      <input type="hidden" name="tax" value="{{ trade.tax }}">
+      <input type="hidden" name="currency" value="{{ trade.currency }}">
+      <input type="hidden" name="date" value="{{ trade.date.isoformat() }}">
+      <input type="hidden" name="name" value="{{ trade.name | default('', true) }}">
+      <input type="hidden" name="wkn" value="{{ trade.wkn | default('', true) }}">
+      <input type="hidden" name="isin" value="{{ trade.isin | default('', true) }}">
+      <input type="hidden" name="order_ref" value="{{ trade.order_ref | default('', true) }}">
+      <div class="field">
+        <label for="ticker">Ticker</label>
+        <input type="text" id="ticker" name="ticker" value="{{ ticker | default('', true) }}" required>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-primary">Confirm Import</button>
+        <a href="/import/pdf"><button type="button" class="btn-ghost">Cancel</button></a>
+      </div>
+    </form>
+  </div>
+
   {% elif step == "done" %}
   <!-- ------------------------------------------------------------------ -->
   <!-- Success / error summary                                              -->
@@ -124,7 +178,7 @@
         <line x1="9" y1="9" x2="15" y2="15"/>
       </svg>
     </div>
-    <div class="error">No holdings were imported. Make sure the tickers exist in your portfolio.</div>
+    <div class="error">{{ message or "No holdings were imported. Make sure the tickers exist in your portfolio." }}</div>
     {% endif %}
     <div class="actions" style="justify-content: center; margin-top: 1rem;">
       <a href="/"><button type="button" class="btn-primary">Back to portfolio</button></a>
