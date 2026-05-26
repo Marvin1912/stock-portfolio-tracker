@@ -76,6 +76,10 @@ async def test_performance_chart_draws_year_boundary(client: AsyncClient) -> Non
         datetime.date(2026, 5, 1),
     )
     with patch.object(
+        PortfolioService,
+        "earliest_transaction_date",
+        new=AsyncMock(return_value=datetime.date(2025, 6, 1)),
+    ), patch.object(
         PortfolioService, "get_performance_history", new=AsyncMock(return_value=history)
     ):
         response = await client.get("/api/v1/holdings/chart/performance")
@@ -92,6 +96,10 @@ async def test_performance_chart_no_boundary_within_single_year(
     """A series wholly inside one calendar year has no separators."""
     history = _series(datetime.date(2025, 2, 1), datetime.date(2025, 11, 1))
     with patch.object(
+        PortfolioService,
+        "earliest_transaction_date",
+        new=AsyncMock(return_value=datetime.date(2025, 2, 1)),
+    ), patch.object(
         PortfolioService, "get_performance_history", new=AsyncMock(return_value=history)
     ):
         response = await client.get("/api/v1/holdings/chart/performance")
