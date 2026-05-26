@@ -62,8 +62,10 @@ async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
 async def get_performance_chart(
     db: AsyncSession = _DB,
 ) -> Response:
-    """Return a Plotly line chart of total portfolio value over the past year."""
-    performance = await PortfolioService().get_performance_history(db)
+    """Return a Plotly line chart of total portfolio value since the first transaction."""
+    service = PortfolioService()
+    since = await service.earliest_transaction_date(db)
+    performance = await service.get_performance_history(db, since=since)
 
     if not performance:
         return JSONResponse(content={})

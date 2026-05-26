@@ -255,7 +255,7 @@ class PortfolioService:
         forward-filled market-value walk used by the Performance chart, but
         spans from the earliest transaction rather than the trailing year.
         """
-        since = await self._earliest_transaction_date(db)
+        since = await self.earliest_transaction_date(db)
         market_values = await self.get_performance_history(db, since=since)
         if not market_values:
             return []
@@ -293,7 +293,7 @@ class PortfolioService:
 
         return gain_loss
 
-    async def _earliest_transaction_date(
+    async def earliest_transaction_date(
         self, db: AsyncSession
     ) -> datetime.date | None:
         """Return the date of the earliest stock transaction, or None."""
