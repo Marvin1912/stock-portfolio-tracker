@@ -5,19 +5,37 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.holding import Holding
 from app.models.price_cache import PriceCache
 from app.models.stock import Stock
-from app.models.transaction import Transaction
+from app.models.transaction import (
+    TX_TYPE_BUY,
+    TX_TYPE_DIVIDEND,
+    TX_TYPE_FEE,
+    TX_TYPE_SELL,
+    TX_TYPE_TAX,
+    Transaction,
+)
 from app.schemas.holdings import HoldingSummaryItem, PortfolioSummary
 from app.services.fx_service import to_eur
 
 _POSITION_TYPES = ("BUY", "SELL", "TRANSFER_IN", "TRANSFER_OUT")
 _POSITIVE_TYPES = {"BUY", "TRANSFER_IN"}
+
+# Transaction types that move cash in or out of the portfolio, used to derive
+# the net-invested baseline for the gain/loss series.  TRANSFER_IN/OUT are
+# excluded — they shift securities, not cash (and don't occur in this data set).
+_CASH_FLOW_TYPES = (
+    TX_TYPE_BUY,
+    TX_TYPE_SELL,
+    TX_TYPE_DIVIDEND,
+    TX_TYPE_FEE,
+    TX_TYPE_TAX,
+)
 
 
 class PortfolioService:
@@ -84,9 +102,12 @@ class PortfolioService:
         return PortfolioSummary(holdings=items, total_value=total_value)
 
     async def get_performance_history(
-        self, db: AsyncSession
+        self, db: AsyncSession, since: datetime.date | None = None
     ) -> list[tuple[datetime.date, Decimal]]:
-        """Return daily total portfolio values for the past year.
+        """Return daily total portfolio values.
+
+        Spans the trailing year by default; pass *since* to start the walk on
+        an earlier date (e.g. the first transaction for the gain/loss chart).
 
         Replays the transaction history so each chart date reflects the
         positions that were actually held on that day — not today's
@@ -139,12 +160,12 @@ class PortfolioService:
         if not tickers_upper:
             return []
 
-        one_year_ago = datetime.date.today() - datetime.timedelta(days=365)
+        lower_bound = since or (datetime.date.today() - datetime.timedelta(days=365))
         price_rows = await db.execute(
             select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
             .where(
                 PriceCache.ticker.in_(tickers_upper),
-                PriceCache.date >= one_year_ago,
+                PriceCache.date >= lower_bound,
             )
             .order_by(PriceCache.date)
         )
@@ -193,3 +214,95 @@ class PortfolioService:
             performance.append((date, total))
 
         return performance
+
+    @staticmethod
+    def _net_invested_delta(
+        tx_type: str, amount: Decimal, fee: Decimal, tax: Decimal
+    ) -> Decimal:
+        """Signed contribution of a transaction to *net invested* (native ccy).
+
+        Positive = cash flowed out of your pocket into the portfolio (raises
+        net invested); negative = cash flowed back to you (lowers it).
+
+        - BUY: ``amount + fee + tax`` (the full cost paid).
+        - SELL: ``-(amount - fee)`` (net proceeds received).
+        - DIVIDEND: ``-amount`` (cash received).
+        - FEE / TAX: ``amount + fee + tax`` (standalone cost; the value sits in
+          whichever column the importer used, so summing all three is robust).
+        """
+        if tx_type == TX_TYPE_BUY:
+            return amount + fee + tax
+        if tx_type == TX_TYPE_SELL:
+            return -(amount - fee)
+        if tx_type == TX_TYPE_DIVIDEND:
+            return -amount
+        if tx_type in (TX_TYPE_FEE, TX_TYPE_TAX):
+            return amount + fee + tax
+        return Decimal("0")
+
+    async def get_gain_loss_history(
+        self, db: AsyncSession
+    ) -> list[tuple[datetime.date, Decimal]]:
+        """Return the daily Total P/L series since the first transaction.
+
+        ``P/L(t) = market_value(t) − net_invested(t)``, where *net invested* is
+        the running sum of cash paid in (BUY cost, standalone FEE/TAX) minus
+        cash taken out (SELL proceeds, DIVIDEND).  This keeps realized gains
+        correct: a fully-sold position has zero market value but its profit
+        lives on as a negative net-invested balance, so the line stays up.
+
+        All amounts are FX-converted to EUR.  The series shares the
+        forward-filled market-value walk used by the Performance chart, but
+        spans from the earliest transaction rather than the trailing year.
+        """
+        since = await self._earliest_transaction_date(db)
+        market_values = await self.get_performance_history(db, since=since)
+        if not market_values:
+            return []
+
+        flow_rows = await db.execute(
+            select(
+                Transaction.date,
+                Transaction.type,
+                Transaction.amount,
+                Transaction.fee,
+                Transaction.tax,
+                Transaction.currency,
+            )
+            .where(Transaction.type.in_(_CASH_FLOW_TYPES))
+            .order_by(Transaction.date)
+        )
+
+        flows: list[tuple[datetime.date, Decimal]] = []
+        for dt, tx_type, amount, fee, tax, currency in flow_rows:
+            delta = self._net_invested_delta(tx_type, amount, fee, tax)
+            if delta == 0:
+                continue
+            flow_date = dt.date() if hasattr(dt, "date") else dt
+            flows.append((flow_date, to_eur(delta, currency)))
+        flows.sort(key=lambda f: f[0])
+
+        gain_loss: list[tuple[datetime.date, Decimal]] = []
+        ptr = 0
+        net_invested = Decimal("0")
+        for date, market_value in market_values:
+            while ptr < len(flows) and flows[ptr][0] <= date:
+                net_invested += flows[ptr][1]
+                ptr += 1
+            gain_loss.append((date, market_value - net_invested))
+
+        return gain_loss
+
+    async def _earliest_transaction_date(
+        self, db: AsyncSession
+    ) -> datetime.date | None:
+        """Return the date of the earliest stock transaction, or None."""
+        result = await db.execute(
+            select(func.min(Transaction.date)).where(
+                Transaction.stock_id.is_not(None)
+            )
+        )
+        earliest = result.scalar_one_or_none()
+        if earliest is None:
+            return None
+        return earliest.date() if hasattr(earliest, "date") else earliest

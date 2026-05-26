@@ -61,6 +61,41 @@ async def get_performance_chart(
     return Response(content=pio.to_json(fig), media_type="application/json")
 
 
+@router.get("/chart/gain-loss")
+async def get_gain_loss_chart(
+    db: AsyncSession = _DB,
+) -> Response:
+    """Return a Plotly line chart of Total P/L since the first transaction."""
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    if not history:
+        return JSONResponse(content={})
+
+    dates = [str(d) for d, _ in history]
+    values = [float(v) for _, v in history]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=dates,
+            y=values,
+            mode="lines",
+            line={"color": "#0066cc", "width": 2},
+            hovertemplate="%{x}<br>P/L: %{y:,.2f}<extra></extra>",
+        )
+    )
+    # Break-even baseline so the crossover between gain and loss is obvious.
+    fig.add_hline(y=0, line={"color": "#888", "width": 1, "dash": "dash"})
+    fig.update_layout(
+        margin={"t": 20, "b": 40, "l": 60, "r": 20},
+        xaxis={"showgrid": False},
+        yaxis={"tickformat": ",.0f", "showgrid": True, "gridcolor": "#eee"},
+        hovermode="x unified",
+        plot_bgcolor="#fff",
+        paper_bgcolor="#fff",
+    )
+    return Response(content=pio.to_json(fig), media_type="application/json")
+
+
 @router.get("/chart/allocation")
 async def get_allocation_chart(
     db: AsyncSession = _DB,

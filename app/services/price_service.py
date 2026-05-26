@@ -10,24 +10,47 @@ from collections.abc import Iterable
 from decimal import Decimal
 from functools import partial
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.price_cache import PriceCache
+from app.models.transaction import Transaction
 from app.services.stock_lookup import fetch_stock_info
 
 logger = logging.getLogger(__name__)
 
 
-def _fetch_history_sync(ticker: str) -> dict[datetime.date, Decimal]:
-    """Fetch 1Y of daily closing prices via yfinance (blocking).
+async def earliest_transaction_date(db: AsyncSession) -> datetime.date | None:
+    """Return the date of the earliest stock transaction, or None if none exist.
 
-    Returns a mapping of {date: close_price}.
+    Used to backfill the price cache far enough for a gain/loss chart that
+    spans "since the first transaction" rather than the default trailing year.
+    """
+    result = await db.execute(
+        select(func.min(Transaction.date)).where(Transaction.stock_id.is_not(None))
+    )
+    earliest = result.scalar_one_or_none()
+    if earliest is None:
+        return None
+    return earliest.date() if hasattr(earliest, "date") else earliest
+
+
+def _fetch_history_sync(
+    ticker: str, start: datetime.date | None = None
+) -> dict[datetime.date, Decimal]:
+    """Fetch daily closing prices via yfinance (blocking).
+
+    With *start* set, fetches from that date forward; otherwise the trailing
+    year.  Returns a mapping of {date: close_price}.
     """
     import yfinance as yf  # type: ignore[import-untyped]
 
-    hist = yf.Ticker(ticker.upper()).history(period="1y")
+    yf_ticker = yf.Ticker(ticker.upper())
+    if start is not None:
+        hist = yf_ticker.history(start=start.isoformat())
+    else:
+        hist = yf_ticker.history(period="1y")
     if hist.empty:
         return {}
     result: dict[datetime.date, Decimal] = {}
@@ -44,9 +67,11 @@ def _fetch_history_sync(ticker: str) -> dict[datetime.date, Decimal]:
     return result
 
 
-async def _fetch_history(ticker: str) -> dict[datetime.date, Decimal]:
+async def _fetch_history(
+    ticker: str, start: datetime.date | None = None
+) -> dict[datetime.date, Decimal]:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, partial(_fetch_history_sync, ticker))
+    return await loop.run_in_executor(None, partial(_fetch_history_sync, ticker, start))
 
 
 async def _upsert_history(
@@ -69,13 +94,18 @@ async def _upsert_history(
 
 
 async def refresh_price_cache(tickers: list[str], db: AsyncSession) -> None:
-    """Fetch 1Y of daily closes for each ticker and upsert into PriceCache.
+    """Fetch daily closes for each ticker and upsert into PriceCache.
+
+    Closes are fetched from the earliest transaction date forward so the
+    gain/loss chart can span the full holding period; with no transactions
+    yet, falls back to the trailing year.
 
     Intended to be called on startup and once per day via the scheduler.
     """
+    start = await earliest_transaction_date(db)
     for ticker in tickers:
         try:
-            history = await _fetch_history(ticker)
+            history = await _fetch_history(ticker, start)
         except Exception:
             logger.exception("Failed to fetch history for %s", ticker)
             continue
@@ -91,7 +121,11 @@ async def refresh_price_cache(tickers: list[str], db: AsyncSession) -> None:
 
 
 async def ensure_prices_cached(tickers: Iterable[str], db: AsyncSession) -> list[str]:
-    """Fetch and cache 1Y of closes for any *tickers* not yet in PriceCache.
+    """Fetch and cache closes for any *tickers* not yet in PriceCache.
+
+    Closes are backfilled from the earliest transaction date forward (falling
+    back to the trailing year when there are no transactions) so a freshly
+    imported ticker has the deep history the gain/loss chart needs.
 
     Called right after an import so a freshly added ticker contributes to the
     portfolio total immediately, instead of showing no value until the daily
@@ -111,11 +145,14 @@ async def ensure_prices_cached(tickers: Iterable[str], db: AsyncSession) -> list
     )
     already_cached = set(existing.scalars().all())
     missing = [t for t in wanted if t not in already_cached]
+    if not missing:
+        return []
 
+    start = await earliest_transaction_date(db)
     fetched: list[str] = []
     for ticker in missing:
         try:
-            history = await _fetch_history(ticker)
+            history = await _fetch_history(ticker, start)
         except Exception:
             logger.exception("Failed to fetch history for %s", ticker)
             continue

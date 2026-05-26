@@ -292,6 +292,11 @@
     <div id="performance-chart" style="height: 300px;"></div>
   </div>
 
+  <div class="chart-card anim-fade-in" style="animation-delay: 425ms">
+    <h2>Gain / Loss</h2>
+    <div id="gain-loss-chart" style="height: 300px;"></div>
+  </div>
+
   <div class="chart-card anim-fade-in" style="animation-delay: 500ms">
     <h2>Allocation</h2>
     <div id="allocation-chart" style="height: 350px;"></div>
@@ -414,6 +419,28 @@
         fig.data[0].line = Object.assign({}, fig.data[0].line, { color: '#22d3a0' });
       }
       Plotly.newPlot('performance-chart', fig.data, layout, {
+        responsive: true,
+        displayModeBar: false,
+      });
+    }
+  })();
+
+  (async () => {
+    const resp = await fetch('/api/v1/holdings/chart/gain-loss');
+    const fig = await resp.json();
+    if (fig && fig.data) {
+      const layout = Object.assign({}, fig.layout, DARK_LAYOUT, {
+        xaxis: Object.assign({}, (fig.layout || {}).xaxis, DARK_LAYOUT.xaxis),
+        yaxis: Object.assign({}, (fig.layout || {}).yaxis, DARK_LAYOUT.yaxis),
+      });
+      if (fig.data[0]) {
+        // Green when in profit, red when underwater (based on the latest point).
+        const y = fig.data[0].y || [];
+        const last = y.length ? y[y.length - 1] : 0;
+        const color = last >= 0 ? '#22d3a0' : '#f85149';
+        fig.data[0].line = Object.assign({}, fig.data[0].line, { color });
+      }
+      Plotly.newPlot('gain-loss-chart', fig.data, layout, {
         responsive: true,
         displayModeBar: false,
       });
