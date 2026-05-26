@@ -275,3 +275,194 @@ async def test_history_returns_empty_when_no_position_events() -> None:
     history = await PortfolioService().get_performance_history(db)
 
     assert history == []
+
+
+# ---------------------------------------------------------------------------
+# get_gain_loss_history — Total P/L since the first transaction (issue #122)
+# ---------------------------------------------------------------------------
+
+
+def _gain_loss_db(
+    earliest: datetime.date | None,
+    events: list[tuple[int, datetime.datetime, str, str]],
+    stocks: dict[int, tuple[str, str]],
+    prices: dict[datetime.date, dict[str, str]],
+    flows: list[tuple[datetime.datetime, str, str, str, str, str]],
+) -> AsyncMock:
+    """Mock session for get_gain_loss_history, in the order it queries:
+
+    1. earliest transaction date:  scalar_one_or_none() -> datetime|None
+    2. transaction events:         (stock_id, datetime, type, shares)
+    3. stock info:                 (id, ticker, currency)
+    4. price cache rows:           (ticker, date, close_price)
+    5. cash-flow rows:             (datetime, type, amount, fee, tax, currency)
+    """
+    earliest_result = MagicMock()
+    earliest_result.scalar_one_or_none.return_value = earliest
+
+    event_rows = [(sid, dt, t, Decimal(sh)) for sid, dt, t, sh in events]
+    event_result = MagicMock()
+    event_result.__iter__ = lambda self: iter(event_rows)
+
+    stock_rows = [(sid, t, c) for sid, (t, c) in stocks.items()]
+    stock_result = MagicMock()
+    stock_result.__iter__ = lambda self: iter(stock_rows)
+
+    price_rows = [
+        (ticker, d, Decimal(p))
+        for d, by_ticker in prices.items()
+        for ticker, p in by_ticker.items()
+    ]
+    price_result = MagicMock()
+    price_result.__iter__ = lambda self: iter(price_rows)
+
+    flow_rows = [
+        (dt, t, Decimal(a), Decimal(f), Decimal(tx), cur)
+        for dt, t, a, f, tx, cur in flows
+    ]
+    flow_result = MagicMock()
+    flow_result.__iter__ = lambda self: iter(flow_rows)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            earliest_result,
+            event_result,
+            stock_result,
+            price_result,
+            flow_result,
+        ]
+    )
+    return db
+
+
+@pytest.mark.asyncio
+async def test_gain_loss_positive_when_up_negative_when_down() -> None:
+    """P/L tracks market value vs. net invested: 0 at cost, +above, −below."""
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _gain_loss_db(
+        earliest=day(1),
+        events=[(1, datetime.datetime(2025, 1, 1), "BUY", "10")],
+        stocks={1: ("AAPL", "EUR")},
+        prices={
+            day(1): {"AAPL": "100.00"},
+            day(2): {"AAPL": "120.00"},
+            day(3): {"AAPL": "90.00"},
+        },
+        flows=[(datetime.datetime(2025, 1, 1), "BUY", "1000", "0", "0", "EUR")],
+    )
+
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    by_date = dict(history)
+    assert by_date[day(1)] == Decimal("0")  # at cost
+    assert by_date[day(2)] == Decimal("200")  # 1200 value − 1000 invested
+    assert by_date[day(3)] == Decimal("-100")  # 900 value − 1000 invested
+
+
+@pytest.mark.asyncio
+async def test_gain_loss_realized_profit_persists_after_full_sell() -> None:
+    """A fully-sold position keeps its profit: value→0, net invested goes
+    negative, so P/L stays at the realized gain."""
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _gain_loss_db(
+        earliest=day(1),
+        events=[
+            (1, datetime.datetime(2025, 1, 1), "BUY", "10"),
+            (1, datetime.datetime(2025, 1, 3), "SELL", "10"),
+        ],
+        stocks={1: ("AAPL", "EUR")},
+        prices={
+            day(1): {"AAPL": "100.00"},
+            day(2): {"AAPL": "100.00"},
+            day(3): {"AAPL": "150.00"},
+            day(4): {"AAPL": "150.00"},
+        },
+        flows=[
+            (datetime.datetime(2025, 1, 1), "BUY", "1000", "0", "0", "EUR"),
+            (datetime.datetime(2025, 1, 3), "SELL", "1500", "0", "0", "EUR"),
+        ],
+    )
+
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    by_date = dict(history)
+    assert by_date[day(1)] == Decimal("0")
+    assert by_date[day(2)] == Decimal("0")
+    # Sold for 1500 having paid 1000 → +500 realized, held even after value→0.
+    assert by_date[day(3)] == Decimal("500")
+    assert by_date[day(4)] == Decimal("500")
+
+
+@pytest.mark.asyncio
+async def test_gain_loss_dividend_increases_pl() -> None:
+    """A DIVIDEND is cash received → lowers net invested → raises P/L."""
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _gain_loss_db(
+        earliest=day(1),
+        events=[(1, datetime.datetime(2025, 1, 1), "BUY", "10")],
+        stocks={1: ("AAPL", "EUR")},
+        prices={
+            day(1): {"AAPL": "100.00"},
+            day(2): {"AAPL": "100.00"},
+        },
+        flows=[
+            (datetime.datetime(2025, 1, 1), "BUY", "1000", "0", "0", "EUR"),
+            (datetime.datetime(2025, 1, 2), "DIVIDEND", "50", "0", "0", "EUR"),
+        ],
+    )
+
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    by_date = dict(history)
+    assert by_date[day(1)] == Decimal("0")
+    assert by_date[day(2)] == Decimal("50")  # value flat, but 50 cash received
+
+
+@pytest.mark.asyncio
+async def test_gain_loss_forward_fills_missing_price() -> None:
+    """A ticker missing a close on one date keeps its value — no P/L dip."""
+    base = datetime.date(2025, 1, 1)
+    day = lambda n: base + datetime.timedelta(days=n - 1)  # noqa: E731
+
+    db = _gain_loss_db(
+        earliest=day(1),
+        events=[
+            (1, datetime.datetime(2025, 1, 1), "BUY", "10"),
+            (2, datetime.datetime(2025, 1, 1), "BUY", "1"),
+        ],
+        stocks={1: ("AAPL", "EUR"), 2: ("BTC-EUR", "EUR")},
+        prices={
+            day(1): {"AAPL": "100.00", "BTC-EUR": "50000.00"},
+            day(2): {"AAPL": "100.00"},  # BTC-EUR missing
+            day(3): {"AAPL": "100.00", "BTC-EUR": "50000.00"},
+        },
+        flows=[
+            (datetime.datetime(2025, 1, 1), "BUY", "1000", "0", "0", "EUR"),
+            (datetime.datetime(2025, 1, 1), "BUY", "50000", "0", "0", "EUR"),
+        ],
+    )
+
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    by_date = dict(history)
+    # Bought at cost (51000) and flat → P/L is 0 throughout; the point is that
+    # day 2 doesn't drop BTC-EUR (which would read −50000).
+    assert by_date[day(1)] == Decimal("0")
+    assert by_date[day(2)] == Decimal("0")
+    assert by_date[day(3)] == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_gain_loss_returns_empty_without_transactions() -> None:
+    db = _gain_loss_db(earliest=None, events=[], stocks={}, prices={}, flows=[])
+
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    assert history == []

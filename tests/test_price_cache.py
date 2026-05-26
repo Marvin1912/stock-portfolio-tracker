@@ -20,6 +20,9 @@ def _make_existing_db(cached_tickers: list[str]) -> AsyncMock:
     """Mock AsyncSession whose ticker-existence query returns *cached_tickers*."""
     existing = MagicMock()
     existing.scalars.return_value.all.return_value = cached_tickers
+    # The earliest-transaction-date query reads scalar_one_or_none; None means
+    # "no transactions yet", so backfill falls back to the trailing year.
+    existing.scalar_one_or_none.return_value = None
     db = AsyncMock(spec=AsyncSession)
     db.execute = AsyncMock(return_value=existing)
     db.flush = AsyncMock()
@@ -99,7 +102,8 @@ async def test_refresh_price_cache_upserts_rows() -> None:
     ):
         await refresh_price_cache(["AAPL"], db)
 
-    db.execute.assert_awaited_once()
+    # One execute for the earliest-transaction-date lookup + one for the upsert.
+    assert db.execute.await_count == 2
     db.commit.assert_awaited_once()
 
 
@@ -115,7 +119,8 @@ async def test_refresh_price_cache_skips_empty_history() -> None:
     ):
         await refresh_price_cache(["AAPL"], db)
 
-    db.execute.assert_not_awaited()
+    # Only the earliest-date lookup ran; empty history means no upsert.
+    assert db.execute.await_count == 1
     db.commit.assert_awaited_once()
 
 
@@ -132,7 +137,8 @@ async def test_refresh_price_cache_handles_fetch_error() -> None:
         # Should not raise — errors are logged and skipped.
         await refresh_price_cache(["AAPL"], db)
 
-    db.execute.assert_not_awaited()
+    # Only the earliest-date lookup ran; the fetch error skips the upsert.
+    assert db.execute.await_count == 1
     db.commit.assert_awaited_once()
 
 
@@ -148,7 +154,8 @@ async def test_refresh_price_cache_multiple_tickers() -> None:
     ):
         await refresh_price_cache(["AAPL", "MSFT"], db)
 
-    assert db.execute.await_count == 2
+    # One earliest-date lookup + one upsert per ticker.
+    assert db.execute.await_count == 3
     db.commit.assert_awaited_once()
 
 
@@ -184,12 +191,12 @@ async def test_ensure_prices_cached_fetches_missing() -> None:
     ) as fetch:
         fetched = await ensure_prices_cached(["NEW"], db)
 
-    fetch.assert_awaited_once_with("NEW")
+    fetch.assert_awaited_once_with("NEW", None)
     assert fetched == ["NEW"]
     db.flush.assert_awaited_once()
     db.commit.assert_not_awaited()
-    # one execute for the existence check + one for the upsert insert
-    assert db.execute.await_count == 2
+    # existence check + earliest-date lookup + the upsert insert
+    assert db.execute.await_count == 3
 
 
 @pytest.mark.asyncio
@@ -215,5 +222,5 @@ async def test_ensure_prices_cached_skips_ticker_with_empty_history() -> None:
 
     assert fetched == []
     db.flush.assert_not_awaited()
-    # only the existence check ran; no upsert
-    assert db.execute.await_count == 1
+    # existence check + earliest-date lookup ran; empty history means no upsert
+    assert db.execute.await_count == 2

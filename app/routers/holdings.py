@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 import plotly.graph_objects as go
 import plotly.io as pio
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,6 +21,34 @@ from app.services.portfolio_service import PortfolioService
 router = APIRouter(prefix="/holdings", tags=["holdings"])
 
 _DB = Depends(get_async_session)
+
+
+def _add_year_boundaries(fig: go.Figure, dates: list[str]) -> None:
+    """Draw a faint dotted vertical line at each Jan-1 within the series span.
+
+    *dates* are ISO date strings (``YYYY-MM-DD``) sorted ascending, as sent to
+    Plotly's date x-axis.  For every calendar year that starts inside the data
+    range a separator is added, labelled with the year at the top of the plot,
+    so the time-series charts read clearly across year boundaries.
+    """
+    if len(dates) < 2:
+        return
+    first = datetime.date.fromisoformat(dates[0])
+    last = datetime.date.fromisoformat(dates[-1])
+    for year in range(first.year + 1, last.year + 1):
+        boundary = datetime.date(year, 1, 1).isoformat()
+        fig.add_vline(x=boundary, line={"color": "#6e7681", "width": 1, "dash": "dot"})
+        fig.add_annotation(
+            x=boundary,
+            yref="paper",
+            y=1,
+            text=str(year),
+            showarrow=False,
+            font={"color": "#8b949e", "size": 11},
+            yanchor="bottom",
+            xanchor="left",
+            xshift=3,
+        )
 
 
 async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
@@ -50,6 +80,43 @@ async def get_performance_chart(
             hovertemplate="%{x}<br>Value: %{y:,.2f}<extra></extra>",
         )
     )
+    _add_year_boundaries(fig, dates)
+    fig.update_layout(
+        margin={"t": 20, "b": 40, "l": 60, "r": 20},
+        xaxis={"showgrid": False},
+        yaxis={"tickformat": ",.0f", "showgrid": True, "gridcolor": "#eee"},
+        hovermode="x unified",
+        plot_bgcolor="#fff",
+        paper_bgcolor="#fff",
+    )
+    return Response(content=pio.to_json(fig), media_type="application/json")
+
+
+@router.get("/chart/gain-loss")
+async def get_gain_loss_chart(
+    db: AsyncSession = _DB,
+) -> Response:
+    """Return a Plotly line chart of Total P/L since the first transaction."""
+    history = await PortfolioService().get_gain_loss_history(db)
+
+    if not history:
+        return JSONResponse(content={})
+
+    dates = [str(d) for d, _ in history]
+    values = [float(v) for _, v in history]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=dates,
+            y=values,
+            mode="lines",
+            line={"color": "#0066cc", "width": 2},
+            hovertemplate="%{x}<br>P/L: %{y:,.2f}<extra></extra>",
+        )
+    )
+    # Break-even baseline so the crossover between gain and loss is obvious.
+    fig.add_hline(y=0, line={"color": "#888", "width": 1, "dash": "dash"})
+    _add_year_boundaries(fig, dates)
     fig.update_layout(
         margin={"t": 20, "b": 40, "l": 60, "r": 20},
         xaxis={"showgrid": False},
