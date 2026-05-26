@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import math
 from collections.abc import Iterable
 from decimal import Decimal
 from functools import partial
@@ -31,8 +32,15 @@ def _fetch_history_sync(ticker: str) -> dict[datetime.date, Decimal]:
         return {}
     result: dict[datetime.date, Decimal] = {}
     for ts, row in hist["Close"].items():
+        close = float(row)
+        # yfinance occasionally returns a NaN close for a non-trading bar
+        # (e.g. a thinly-traded ETF on a partial-holiday session).  Storing
+        # it as Decimal('NaN') makes it the "latest" close and blanks the
+        # holding's value, so drop non-finite closes here.
+        if not math.isfinite(close):
+            continue
         date = ts.date() if hasattr(ts, "date") else ts
-        result[date] = Decimal(str(round(float(row), 4)))
+        result[date] = Decimal(str(round(close, 4)))
     return result
 
 
@@ -141,7 +149,11 @@ async def get_latest_close(ticker: str, db: AsyncSession) -> Decimal | None:
     """Return the most recently cached close price for *ticker*, or None."""
     result = await db.execute(
         select(PriceCache.close_price)
-        .where(PriceCache.ticker == ticker.upper())
+        .where(
+            PriceCache.ticker == ticker.upper(),
+            # Skip non-finite (NaN) closes so a bad bar can't be the latest.
+            PriceCache.close_price != Decimal("NaN"),
+        )
         .order_by(PriceCache.date.desc())
         .limit(1)
     )

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 
-from app.services.price_service import StockPriceService
+from app.services.price_service import StockPriceService, _fetch_history_sync
 from app.services.stock_lookup import StockInfo
 
 _APPLE = StockInfo(
@@ -61,3 +63,17 @@ async def test_validate_ticker_valid(service: StockPriceService) -> None:
 async def test_validate_ticker_invalid(service: StockPriceService) -> None:
     with patch("app.services.price_service.fetch_stock_info", AsyncMock(return_value=None)):
         assert await service.validate_ticker("INVALID") is False
+
+
+def test_fetch_history_skips_nan_close() -> None:
+    """A NaN close (e.g. a partial-holiday bar) must not be stored."""
+    index = pd.to_datetime(["2026-05-22", "2026-05-25"])
+    hist = pd.DataFrame({"Close": [102.37, float("nan")]}, index=index)
+    fake_ticker = MagicMock()
+    fake_ticker.history.return_value = hist
+
+    with patch("yfinance.Ticker", return_value=fake_ticker):
+        result = _fetch_history_sync("EUNL.DE")
+
+    assert result == {datetime.date(2026, 5, 22): Decimal("102.37")}
+    assert datetime.date(2026, 5, 25) not in result

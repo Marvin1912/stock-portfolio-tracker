@@ -32,7 +32,12 @@ class PortfolioService:
         stmt = (
             select(PriceCache.ticker, PriceCache.close_price)
             .distinct(PriceCache.ticker)
-            .where(PriceCache.ticker.in_(tickers))
+            .where(
+                PriceCache.ticker.in_(tickers),
+                # Ignore any non-finite (NaN) close so a bad bar can't become
+                # the "latest" price and blank the holding's value.
+                PriceCache.close_price != Decimal("NaN"),
+            )
             .order_by(PriceCache.ticker, PriceCache.date.desc())
         )
         result = await db.execute(stmt)
