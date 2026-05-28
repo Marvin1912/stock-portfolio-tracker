@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}Portfolio Overview{% endblock %}
+{% block title %}Portfolio — Meridian{% endblock %}
+{% block active_page %}portfolio{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
@@ -10,53 +11,72 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 1.5rem 2rem;
+    padding: 1.75rem 2.25rem;
     margin-bottom: 2rem;
     display: flex;
     align-items: center;
     gap: 3rem;
     flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(to right, var(--accent), transparent 60%);
+    opacity: 0.6;
   }
   .hero-primary {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
   .hero-label {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
   }
   .hero-value {
-    font-family: var(--font-ui);
-    font-size: 2.6rem;
-    font-weight: 800;
+    font-family: var(--font-display);
+    font-size: 3.5rem;
+    font-weight: 600;
     color: var(--text);
     line-height: 1;
+    letter-spacing: -0.01em;
   }
   .hero-value .hero-currency {
-    font-size: 1.1rem;
+    font-family: var(--font-ui);
+    font-size: 1rem;
     font-weight: 400;
     color: var(--muted);
-    margin-left: 0.25rem;
+    margin-left: 0.35rem;
+  }
+  .hero-divider {
+    width: 1px;
+    height: 44px;
+    background: var(--border);
+    align-self: center;
+    flex-shrink: 0;
   }
   .hero-kpi {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.2rem;
   }
   .hero-kpi-label {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
   }
   .hero-kpi-value {
     font-family: var(--font-mono);
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 600;
     color: var(--text);
   }
@@ -67,9 +87,9 @@
     justify-content: flex-end;
     gap: 0.75rem;
     margin-bottom: 1.25rem;
+    flex-wrap: wrap;
   }
 
-  /* Refresh button loading state swap */
   .htmx-indicator-show { display: none; }
   .htmx-request .htmx-indicator-hide { display: none; }
   .htmx-request .htmx-indicator-show { display: inline; }
@@ -86,6 +106,32 @@
     margin-bottom: 1.5rem;
   }
 
+  /* ── Chart layout ────────────────────────────────────────────── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .chart-card h2 {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .chart-row .chart-card { margin-bottom: 0; }
+  @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+
   /* ── Holdings table ─────────────────────────────────────────── */
   .holdings-table {
     width: 100%;
@@ -93,18 +139,17 @@
     border-spacing: 0;
     margin-bottom: 1.5rem;
   }
-  .holdings-table thead tr {
-    background: var(--surface);
-  }
+  .holdings-table thead tr { background: var(--surface); }
   .holdings-table th {
     padding: 0.6rem 1rem;
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     color: var(--muted);
-    font-weight: 600;
+    font-weight: 500;
     border-bottom: 1px solid var(--border);
     text-align: left;
+    font-family: var(--font-mono);
   }
   .holdings-table th.number,
   .holdings-table td.number {
@@ -118,28 +163,17 @@
     min-width: 160px;
     white-space: nowrap;
   }
-  .holdings-table td.actions {
-    display: table-cell;
-  }
-  .holdings-table td.actions button {
-    display: inline-block;
-  }
-  .holdings-table tbody tr {
-    transition: background 150ms ease;
-    position: relative;
-  }
+  .holdings-table td.actions { display: table-cell; }
+  .holdings-table td.actions button { display: inline-block; }
+  .holdings-table tbody tr { transition: background 150ms ease; }
   .holdings-table tbody tr td:first-child {
     border-left: 2px solid transparent;
     transition: border-left-color 150ms ease;
   }
-  .holdings-table tbody tr:not(.editing):hover td:first-child {
-    border-left-color: var(--accent);
-  }
-  .holdings-table tbody tr:not(.editing):hover td {
-    background: rgba(34, 211, 160, 0.03);
-  }
+  .holdings-table tbody tr:not(.editing):hover td:first-child { border-left-color: var(--accent); }
+  .holdings-table tbody tr:not(.editing):hover td { background: rgba(212, 146, 74, 0.025); }
   .holdings-table td {
-    padding: 0.65rem 1rem;
+    padding: 0.7rem 1rem;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
   }
@@ -152,7 +186,7 @@
   .holding-name {
     display: block;
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--muted);
     font-weight: 400;
     margin-top: 0.1rem;
@@ -160,7 +194,7 @@
   .asset-badge {
     display: inline-block;
     font-family: var(--font-mono);
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -171,8 +205,8 @@
   }
   .asset-badge-crypto {
     background: rgba(247, 147, 26, 0.12);
-    color: #f7931a;
-    border: 1px solid rgba(247, 147, 26, 0.35);
+    color: #f0922e;
+    border: 1px solid rgba(247, 147, 26, 0.3);
   }
   .holdings-table tfoot .total-row td {
     border-top: 2px solid var(--border);
@@ -182,47 +216,31 @@
     padding-top: 0.8rem;
   }
 
-  /* ── Chart containers ───────────────────────────────────────── */
-  .chart-card {
-    background: #161b22;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-  .chart-card h2 {
-    font-family: var(--font-ui);
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.7rem;
-    color: var(--muted);
-    margin-bottom: 1rem;
-  }
-
   /* ── Empty state ────────────────────────────────────────────── */
   .empty-state {
     text-align: center;
     padding: 4rem 2rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
   }
   .empty-state-glyph {
-    font-family: var(--font-mono);
+    font-family: var(--font-display);
     font-size: 3rem;
+    font-style: italic;
     color: var(--border);
     margin-bottom: 1rem;
     line-height: 1;
+    opacity: 0.6;
   }
   .empty-state-title {
     font-family: var(--font-ui);
     font-size: 1.1rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
     margin-bottom: 0.4rem;
   }
-  .empty-state p {
-    color: var(--muted);
-    margin-bottom: 1.5rem;
-  }
+  .empty-state p { color: var(--muted); margin-bottom: 1.5rem; }
 </style>
 {% endblock %}
 
@@ -236,15 +254,17 @@
         {% if total_value is not none %}
           {{ "%.2f"|format(total_value) }}<span class="hero-currency">EUR</span>
         {% else %}
-          <span style="color: var(--muted);">—</span>
+          <span style="color: var(--muted); font-family: var(--font-mono);">—</span>
         {% endif %}
       </span>
     </div>
+    <div class="hero-divider"></div>
     <div class="hero-kpi">
-      <span class="hero-kpi-label">Holdings</span>
+      <span class="hero-kpi-label">Positions</span>
       <span class="hero-kpi-value">{{ holdings_count }}</span>
     </div>
     {% if last_refresh %}
+    <div class="hero-divider"></div>
     <div class="hero-kpi">
       <span class="hero-kpi-label">Last Refresh</span>
       <span class="hero-kpi-value">{{ last_refresh }}</span>
@@ -287,19 +307,20 @@
 
   <!-- Charts (only when there is data) -->
   {% if total_value is not none %}
-  <div class="chart-card anim-fade-in" style="animation-delay: 350ms">
+  <div class="chart-card anim-fade-in" style="animation-delay: 300ms">
     <h2>Performance</h2>
-    <div id="performance-chart" style="height: 300px;"></div>
+    <div id="performance-chart" style="height: 310px;"></div>
   </div>
 
-  <div class="chart-card anim-fade-in" style="animation-delay: 425ms">
-    <h2>Gain / Loss</h2>
-    <div id="gain-loss-chart" style="height: 300px;"></div>
-  </div>
-
-  <div class="chart-card anim-fade-in" style="animation-delay: 500ms">
-    <h2>Allocation</h2>
-    <div id="allocation-chart" style="height: 350px;"></div>
+  <div class="chart-row">
+    <div class="chart-card anim-fade-in" style="animation-delay: 400ms">
+      <h2>Gain / Loss</h2>
+      <div id="gain-loss-chart" style="height: 250px;"></div>
+    </div>
+    <div class="chart-card anim-fade-in" style="animation-delay: 480ms">
+      <h2>Allocation</h2>
+      <div id="allocation-chart" style="height: 250px;"></div>
+    </div>
   </div>
   {% endif %}
 
@@ -379,7 +400,7 @@
     <tbody id="holdings-tbody"></tbody>
   </table>
   <div class="empty-state">
-    <div class="empty-state-glyph">[ ]</div>
+    <div class="empty-state-glyph">∅</div>
     <div class="empty-state-title">No holdings yet</div>
     <p>Your portfolio is empty. Add your first holding to get started.</p>
     <button
@@ -399,12 +420,13 @@
 {% if total_value is not none %}
 <script>
   const DARK_LAYOUT = {
-    paper_bgcolor: '#0d1117',
-    plot_bgcolor: '#161b22',
-    font: { color: '#e6edf3', family: "'JetBrains Mono', monospace" },
-    xaxis: { gridcolor: '#30363d', zerolinecolor: '#30363d' },
-    yaxis: { gridcolor: '#30363d', zerolinecolor: '#30363d' },
-    legend: { bgcolor: 'transparent', font: { color: '#8b949e' } },
+    paper_bgcolor: '#0A0908',
+    plot_bgcolor:  '#141210',
+    font: { color: '#F2EDE4', family: "'JetBrains Mono', monospace" },
+    xaxis: { gridcolor: '#2C2825', zerolinecolor: '#2C2825' },
+    yaxis: { gridcolor: '#2C2825', zerolinecolor: '#2C2825' },
+    legend: { bgcolor: 'transparent', font: { color: '#8A8178' } },
+    margin: { t: 16, b: 40, l: 56, r: 16 },
   };
 
   (async () => {
@@ -416,12 +438,10 @@
         yaxis: Object.assign({}, (fig.layout || {}).yaxis, DARK_LAYOUT.yaxis),
       });
       if (fig.data[0]) {
-        fig.data[0].line = Object.assign({}, fig.data[0].line, { color: '#22d3a0' });
+        fig.data[0].line = Object.assign({}, fig.data[0].line, { color: '#D4924A', width: 2 });
+        fig.data[0].fillcolor = 'rgba(212, 146, 74, 0.07)';
       }
-      Plotly.newPlot('performance-chart', fig.data, layout, {
-        responsive: true,
-        displayModeBar: false,
-      });
+      Plotly.newPlot('performance-chart', fig.data, layout, { responsive: true, displayModeBar: false });
     }
   })();
 
@@ -434,16 +454,13 @@
         yaxis: Object.assign({}, (fig.layout || {}).yaxis, DARK_LAYOUT.yaxis),
       });
       if (fig.data[0]) {
-        // Green when in profit, red when underwater (based on the latest point).
         const y = fig.data[0].y || [];
         const last = y.length ? y[y.length - 1] : 0;
-        const color = last >= 0 ? '#22d3a0' : '#f85149';
+        const color = last >= 0 ? '#5AB87E' : '#C96B6B';
         fig.data[0].line = Object.assign({}, fig.data[0].line, { color });
+        fig.data[0].fillcolor = last >= 0 ? 'rgba(90, 184, 126, 0.07)' : 'rgba(201, 107, 107, 0.07)';
       }
-      Plotly.newPlot('gain-loss-chart', fig.data, layout, {
-        responsive: true,
-        displayModeBar: false,
-      });
+      Plotly.newPlot('gain-loss-chart', fig.data, layout, { responsive: true, displayModeBar: false });
     }
   })();
 
@@ -454,24 +471,34 @@
       const layout = Object.assign({}, fig.layout, DARK_LAYOUT, {
         xaxis: Object.assign({}, (fig.layout || {}).xaxis, DARK_LAYOUT.xaxis),
         yaxis: Object.assign({}, (fig.layout || {}).yaxis, DARK_LAYOUT.yaxis),
+        showlegend: true,
+        legend: {
+          bgcolor: 'transparent',
+          font: { color: '#8A8178', size: 11, family: "'JetBrains Mono', monospace" },
+          orientation: 'v',
+          x: 1, y: 0.5,
+          xanchor: 'left',
+        },
+        margin: { t: 16, b: 16, l: 16, r: 100 },
       });
-      Plotly.newPlot('allocation-chart', fig.data, layout, {
-        responsive: true,
-        displayModeBar: false,
-      });
+      if (fig.data[0]) {
+        fig.data[0].marker = {
+          colors: ['#D4924A', '#5AB87E', '#7BAFD4', '#C9A96B', '#8A7B6B', '#C96B6B', '#A49478', '#6B8A7B'],
+          line: { color: '#0A0908', width: 2 },
+        };
+      }
+      Plotly.newPlot('allocation-chart', fig.data, layout, { responsive: true, displayModeBar: false });
     }
   })();
 </script>
 {% endif %}
 <script>
-  // Open add-form-slot after HTMX loads the add holding form
   document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target && evt.detail.target.id === 'add-form-slot') {
       evt.detail.target.classList.add('open');
     }
   });
 
-  // Delete row collapse animation
   document.body.addEventListener('htmx:beforeSwap', function(evt) {
     var target = evt.detail.target;
     if (target && target.id && target.id.startsWith('holding-row-') && evt.detail.serverResponse === '') {

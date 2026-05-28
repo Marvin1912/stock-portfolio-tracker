@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Import Broker PDF{% endblock %}
+{% block title %}Import Broker PDF — Meridian{% endblock %}
+{% block active_page %}import-pdf{% endblock %}
 
 {% block content %}
-  <p style="margin-bottom: 0.75rem;"><a href="/">&larr; Back to portfolio</a></p>
+  <a href="/" class="back-nav">&larr; Portfolio</a>
   <h1>Import Broker PDF</h1>
 
   <!-- Step indicator -->
@@ -148,7 +149,7 @@
     <h2>Import complete</h2>
     {% if processed %}
     <div class="done-icon">
-      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--positive)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <polyline points="9 12 11.5 14.5 16 10"/>
       </svg>
@@ -172,7 +173,7 @@
     </table>
     {% else %}
     <div class="done-icon">
-      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--negative)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <line x1="15" y1="9" x2="9" y2="15"/>
         <line x1="9" y1="9" x2="15" y2="15"/>

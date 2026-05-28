@@ -1,42 +1,123 @@
 {% extends "base.html" %}
 
-{% block title %}Monthly Reports — Terminal Ledger{% endblock %}
+{% block title %}Reports — Meridian{% endblock %}
+{% block active_page %}reports{% endblock %}
+
+{% block extra_head %}
+<style>
+  .reports-header { margin-bottom: 2.5rem; }
+  .reports-title {
+    font-family: var(--font-display);
+    font-size: 2.8rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .reports-subtitle { color: var(--muted); font-size: 0.9rem; }
+
+  .reports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .report-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    text-decoration: none;
+    transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  }
+  .report-card:hover {
+    border-color: var(--accent);
+    background: rgba(212, 146, 74, 0.04);
+    transform: translateY(-2px);
+    text-decoration: none;
+    opacity: 1;
+  }
+  .report-card-year {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.1rem;
+  }
+  .report-card-month {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 0.35rem;
+  }
+  .report-card-range {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .report-card-link {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-top: auto;
+    padding-top: 1rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+  }
+
+  .reports-empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+  }
+  .reports-empty-glyph {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    font-style: italic;
+    color: var(--border);
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
+  .reports-empty-title {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<h1>Monthly Reports</h1>
-<p>Historical portfolio performance, one month at a time.</p>
+<div class="reports-header anim-fade-slide-down">
+  <div class="reports-title">Reports</div>
+  <p class="reports-subtitle">Historical portfolio performance, one month at a time.</p>
+</div>
 
 {% if months %}
-<table style="margin-top: 1.5rem;">
-  <thead>
-    <tr>
-      <th>Period</th>
-      <th>Date Range</th>
-      <th class="actions"></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for m in months %}
-    <tr>
-      <td><span class="text-mono" style="font-weight: 600;">{{ m.label }}</span></td>
-      <td style="color: var(--muted); font-family: var(--font-mono); font-size: 0.85rem;">
-        {{ m.period_start.strftime("%d %b %Y") }} – {{ m.period_end.strftime("%d %b %Y") }}
-      </td>
-      <td class="actions">
-        <a href="/reports/{{ m.year }}/{{ '%02d'|format(m.month) }}"
-           style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600;">
-          View &rarr;
-        </a>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="reports-grid">
+  {% for m in months %}
+  <a href="/reports/{{ m.year }}/{{ '%02d'|format(m.month) }}" class="report-card anim-fade-in" style="animation-delay: {{ loop.index0 * 45 }}ms">
+    <div class="report-card-year">{{ m.year }}</div>
+    <div class="report-card-month">{{ m.label.split(' ')[0] }}</div>
+    <div class="report-card-range">
+      {{ m.period_start.strftime("%d %b") }} – {{ m.period_end.strftime("%d %b") }}
+    </div>
+    <div class="report-card-link">View &rarr;</div>
+  </a>
+  {% endfor %}
+</div>
 {% else %}
-<div style="margin-top: 2rem; text-align: center; padding: 3rem 1.5rem; border: 1px dashed var(--border); border-radius: var(--radius);">
-  <p style="font-family: var(--font-mono); font-size: 2rem; color: var(--border); margin-bottom: 1rem;">[ ]</p>
-  <p style="font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">No reports yet</p>
-  <p style="font-size: 0.9rem;">Reports will appear here once a full calendar month of price data has been recorded.</p>
+<div class="reports-empty">
+  <div class="reports-empty-glyph">∅</div>
+  <p class="reports-empty-title">No reports yet</p>
+  <p>Reports appear once a full calendar month of price data has been recorded.</p>
 </div>
 {% endif %}
 {% endblock %}

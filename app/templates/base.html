@@ -3,25 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Terminal Ledger{% endblock %}</title>
+  <title>{% block title %}Meridian{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
   <style>
     /* ── Design tokens ──────────────────────────────────────── */
     :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
-      --border:    #30363d;
-      --accent:    #22d3a0;
-      --danger:    #ff4d6d;
-      --text:      #e6edf3;
-      --muted:     #8b949e;
-      --font-ui:   "Syne", system-ui, sans-serif;
-      --font-mono: "JetBrains Mono", "Fira Code", monospace;
-      --radius:    6px;
-      --radius-sm: 4px;
+      --bg:           #0A0908;
+      --surface:      #141210;
+      --surface-2:    #1C1916;
+      --border:       #2C2825;
+      --accent:       #D4924A;
+      --positive:     #5AB87E;
+      --negative:     #C96B6B;
+      --danger:       #C96B6B;   /* alias for backward compat */
+      --text:         #F2EDE4;
+      --muted:        #8A8178;
+      --font-display: "Cormorant Garamond", Georgia, serif;
+      --font-ui:      "DM Sans", system-ui, sans-serif;
+      --font-mono:    "JetBrains Mono", "Fira Code", monospace;
+      --radius:       8px;
+      --radius-sm:    5px;
+      --sidebar-w:    220px;
     }
 
     /* ── Reset & base ───────────────────────────────────────── */
@@ -30,8 +35,8 @@
     body {
       background-color: var(--bg);
       background-image:
-        radial-gradient(ellipse at 20% 0%,   rgba(34, 211, 160, 0.04) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 100%, rgba(34, 211, 160, 0.03) 0%, transparent 50%);
+        radial-gradient(ellipse at 75% 0%,   rgba(212, 146, 74, 0.04) 0%, transparent 55%),
+        radial-gradient(ellipse at 15% 100%, rgba(212, 146, 74, 0.025) 0%, transparent 50%);
       color: var(--text);
       font-family: var(--font-ui);
       font-size: 15px;
@@ -40,115 +45,189 @@
     }
 
     h1, h2, h3, h4 { font-family: var(--font-ui); font-weight: 700; line-height: 1.2; }
-    h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 1rem; }
-    h2 { font-size: 1.1rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 1rem; }
+    h2 { font-size: 1.05rem; font-weight: 600; }
 
     a { color: var(--accent); text-decoration: none; }
     a:hover { opacity: 0.8; text-decoration: underline; }
-
     p { color: var(--muted); }
 
     input, select, textarea {
-      background: var(--bg);
+      background: var(--surface-2);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       font-family: var(--font-ui);
       font-size: 0.9rem;
-      padding: 0.35rem 0.6rem;
+      padding: 0.4rem 0.7rem;
       transition: border-color 150ms ease, box-shadow 150ms ease;
     }
     input:focus, select:focus, textarea:focus {
       outline: none;
       border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(34, 211, 160, 0.15);
+      box-shadow: 0 0 0 2px rgba(212, 146, 74, 0.15);
     }
 
-    /* ── Navigation ─────────────────────────────────────────── */
-    .nav {
-      border-bottom: 1px solid var(--border);
+    /* ── App shell & sidebar ────────────────────────────────── */
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
       background: var(--surface);
-      padding: 0 1.5rem;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
       display: flex;
       align-items: center;
-      gap: 1rem;
-      height: 52px;
+      gap: 0.55rem;
+      padding: 1.4rem 1.25rem 1.1rem;
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 600;
+      font-style: italic;
+      color: var(--text);
+      letter-spacing: 0.01em;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
     }
-    .nav-logo {
-      font-family: var(--font-ui);
-      font-weight: 800;
-      font-size: 1rem;
-      color: var(--accent);
-      letter-spacing: 0.02em;
+    .sidebar-logo:hover { opacity: 1; text-decoration: none; color: var(--accent); }
+    .sidebar-logo-icon { color: var(--accent); flex-shrink: 0; }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      padding: 0 0.65rem;
+      flex: 1;
     }
-    .nav-logo:hover { opacity: 0.8; text-decoration: none; }
-    .nav-sep { color: var(--border); user-select: none; }
-    .nav-link {
+
+    .sidebar-section-label {
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      padding: 0.85rem 0.65rem 0.2rem;
+      font-family: var(--font-mono);
+      opacity: 0.6;
+    }
+
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: var(--radius-sm);
       color: var(--muted);
       font-size: 0.875rem;
+      font-weight: 500;
+      font-family: var(--font-ui);
+      text-decoration: none;
+      transition: color 120ms ease, background 120ms ease;
+    }
+    .sidebar-link:hover {
+      color: var(--text);
+      background: rgba(242, 237, 228, 0.045);
+      text-decoration: none;
+      opacity: 1;
+    }
+    .sidebar-link.active {
+      color: var(--accent);
+      background: rgba(212, 146, 74, 0.1);
       font-weight: 600;
     }
-    .nav-link:hover { color: var(--text); text-decoration: none; opacity: 1; }
-
-    /* ── Main wrapper ────────────────────────────────────────── */
-    .page {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
+    .sidebar-icon {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      color: currentColor;
+      opacity: 0.9;
     }
-    .page--wide {
-      max-width: min(1400px, calc(100vw - 3rem));
+
+    .sidebar-footer {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-version {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      opacity: 0.5;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Main content area ──────────────────────────────────── */
+    .main-content {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+      padding: 2.5rem 2.75rem;
+      max-width: calc(960px + var(--sidebar-w));
+    }
+    .main-content--wide {
+      max-width: min(1440px, calc(100vw - var(--sidebar-w)));
     }
 
     /* ── Tables ──────────────────────────────────────────────── */
     table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
-    th, td { padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th, td { padding: 0.65rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
     th {
       background: var(--surface);
-      font-weight: 600;
-      font-size: 0.75rem;
+      font-weight: 500;
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       color: var(--muted);
+      font-family: var(--font-mono);
     }
-    tbody tr:hover:not(.editing) { background: rgba(255, 255, 255, 0.02); }
+    tbody tr:hover:not(.editing) { background: rgba(242, 237, 228, 0.02); }
     th.number, td.number { text-align: right; font-family: var(--font-mono); }
     th.actions, td.actions { text-align: right; width: 130px; }
-    .total-row { font-weight: bold; border-top: 2px solid var(--border); }
+    .total-row { font-weight: 700; border-top: 2px solid var(--border); }
 
     /* ── Buttons ─────────────────────────────────────────────── */
     button {
       cursor: pointer;
       border: none;
       border-radius: var(--radius-sm);
-      padding: 0.3rem 0.7rem;
+      padding: 0.3rem 0.75rem;
       font-size: 0.85rem;
       font-family: var(--font-ui);
-      font-weight: 600;
+      font-weight: 500;
+      transition: opacity 120ms ease, background 120ms ease;
     }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* Utility classes */
-    .btn-primary { background: var(--accent); color: #0d1117; padding: 0.4rem 1rem; font-size: 0.9rem; }
-    .btn-primary:hover { opacity: 0.85; }
-    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-primary { background: var(--accent); color: var(--bg); padding: 0.45rem 1.1rem; font-size: 0.9rem; font-weight: 600; }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-danger  { background: var(--negative); color: #fff; }
     .btn-danger:hover  { opacity: 0.85; }
     .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
     .btn-ghost:hover   { color: var(--text); border-color: var(--muted); }
 
-    /* Legacy button names used by existing templates and partials */
-    .btn-add    { background: var(--accent); color: #0d1117; padding: 0.4rem 1rem; font-size: 0.9rem; margin-bottom: 1rem; }
-    .btn-add:hover    { opacity: 0.85; }
-    .btn-edit   { background: rgba(34, 211, 160, 0.1); color: var(--accent); }
-    .btn-edit:hover   { background: rgba(34, 211, 160, 0.2); }
-    .btn-save   { background: var(--accent); color: #0d1117; }
-    .btn-save:hover   { opacity: 0.85; }
+    .btn-add    { background: var(--accent); color: var(--bg); padding: 0.45rem 1.1rem; font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; }
+    .btn-add:hover    { opacity: 0.88; }
+    .btn-edit   { background: rgba(212, 146, 74, 0.1); color: var(--accent); }
+    .btn-edit:hover   { background: rgba(212, 146, 74, 0.18); }
+    .btn-save   { background: var(--accent); color: var(--bg); }
+    .btn-save:hover   { opacity: 0.88; }
     .btn-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); }
     .btn-cancel:hover { color: var(--text); border-color: var(--muted); }
-    .btn-delete { background: rgba(255, 77, 109, 0.12); color: var(--danger); margin-left: 0.3rem; }
-    .btn-delete:hover { background: rgba(255, 77, 109, 0.22); }
-    .btn-confirm   { background: var(--accent); color: #0d1117; }
-    .btn-confirm:hover { opacity: 0.85; }
+    .btn-delete { background: rgba(201, 107, 107, 0.1); color: var(--negative); margin-left: 0.3rem; }
+    .btn-delete:hover { background: rgba(201, 107, 107, 0.2); }
+    .btn-confirm   { background: var(--accent); color: var(--bg); }
+    .btn-confirm:hover { opacity: 0.88; }
     .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-left: 0.5rem; }
     .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
 
@@ -170,9 +249,9 @@
       margin-bottom: 1.5rem;
       background: var(--surface);
     }
-    .add-form-container h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+    .add-form-container h2 { margin: 0 0 1rem; font-size: 1rem; }
     .form-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
-    .form-row label { min-width: 70px; font-weight: 600; font-size: 0.9rem; color: var(--muted); }
+    .form-row label { min-width: 70px; font-weight: 500; font-size: 0.875rem; color: var(--muted); }
     .form-row input { width: 160px; }
     .form-or-divider {
       display: flex;
@@ -187,24 +266,24 @@
       height: 1px;
       background: var(--border);
     }
-    .or-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .or-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
     .input-group { display: flex; align-items: center; gap: 0.5rem; }
     .form-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
-    .form-error { color: var(--danger); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .form-error { color: var(--negative); font-size: 0.85rem; margin-bottom: 0.5rem; }
 
     .error {
-      color: var(--danger);
-      background: rgba(255, 77, 109, 0.1);
-      border: 1px solid rgba(255, 77, 109, 0.3);
+      color: var(--negative);
+      background: rgba(201, 107, 107, 0.08);
+      border: 1px solid rgba(201, 107, 107, 0.25);
       border-radius: var(--radius-sm);
       padding: 0.7rem 1rem;
       margin-bottom: 1rem;
       font-size: 0.9rem;
     }
     .success {
-      color: var(--accent);
-      background: rgba(34, 211, 160, 0.08);
-      border: 1px solid rgba(34, 211, 160, 0.3);
+      color: var(--positive);
+      background: rgba(90, 184, 126, 0.08);
+      border: 1px solid rgba(90, 184, 126, 0.25);
       border-radius: var(--radius-sm);
       padding: 0.7rem 1rem;
       margin-bottom: 1rem;
@@ -227,12 +306,12 @@
       border-radius: 50%;
       flex-shrink: 0;
     }
-    .ticker-hint.positive .ticker-hint-dot { background: var(--accent); }
-    .ticker-hint.negative .ticker-hint-dot { background: var(--danger); }
-    .ticker-hint.positive { color: var(--accent); }
-    .ticker-hint.negative { color: var(--danger); }
-    .ticker-valid   { color: var(--accent); font-size: 0.85rem; }
-    .ticker-invalid { color: var(--danger);  font-size: 0.85rem; }
+    .ticker-hint.positive .ticker-hint-dot { background: var(--positive); }
+    .ticker-hint.negative .ticker-hint-dot { background: var(--negative); }
+    .ticker-hint.positive { color: var(--positive); }
+    .ticker-hint.negative { color: var(--negative); }
+    .ticker-valid   { color: var(--positive); font-size: 0.85rem; }
+    .ticker-invalid { color: var(--negative); font-size: 0.85rem; }
 
     /* ── Charts ──────────────────────────────────────────────── */
     .chart-section { margin-bottom: 2rem; }
@@ -242,24 +321,24 @@
     /* ── Inline edit (portfolio table) ───────────────────────── */
     .inline-form { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
     .qty-input { width: 100px; font-family: var(--font-mono); }
-    .editing td { background: #1c2128; }
+    .editing td { background: var(--surface-2); }
     .input-mono { font-family: var(--font-mono); }
-    .input-glow:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(34, 211, 160, 0.15); }
+    .input-glow:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(212, 146, 74, 0.15); }
 
-    /* ── Stock detail ────────────────────────────────────────── */
+    /* ── Summary card (used in stock detail + import XML) ────── */
     .subtitle { color: var(--muted); margin-bottom: 2rem; font-family: var(--font-mono); font-size: 0.95rem; }
     .summary-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem 1.5rem; margin-bottom: 2rem; background: var(--surface); }
-    .summary-card h2 { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; }
+    .summary-card h2 { margin: 0 0 1rem; font-size: 0.875rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
     .summary-item { display: flex; flex-direction: column; }
-    .summary-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; }
-    .summary-value { font-size: 1.1rem; font-weight: 600; font-family: var(--font-mono); }
+    .summary-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.25rem; font-family: var(--font-mono); }
+    .summary-value { font-size: 1rem; font-weight: 600; font-family: var(--font-mono); color: var(--text); }
 
     /* ── Import page ─────────────────────────────────────────── */
     div.actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
     .note { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
 
-    /* ── Filter bar (preview/list tables) ────────────────────── */
+    /* ── Filter bar ──────────────────────────────────────────── */
     .filter-bar {
       display: flex;
       flex-wrap: wrap;
@@ -282,26 +361,20 @@
       display: flex;
       align-items: center;
       gap: 0;
-      margin-bottom: 2rem;
-      font-family: var(--font-mono);
+      margin-bottom: 2.5rem;
       font-size: 0.82rem;
-      letter-spacing: 0.03em;
     }
     .step-item {
       display: flex;
       align-items: center;
       gap: 0.45rem;
       color: var(--muted);
-      opacity: 0.5;
+      opacity: 0.45;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
     }
-    .step-item.active {
-      color: var(--accent);
-      opacity: 1;
-    }
-    .step-item.completed {
-      color: var(--accent);
-      opacity: 0.7;
-    }
+    .step-item.active { color: var(--accent); opacity: 1; }
+    .step-item.completed { color: var(--positive); opacity: 0.75; }
     .step-num {
       display: inline-flex;
       align-items: center;
@@ -318,6 +391,11 @@
       color: var(--bg);
       border-color: var(--accent);
     }
+    .step-item.completed .step-num {
+      background: var(--positive);
+      color: var(--bg);
+      border-color: var(--positive);
+    }
     .step-arrow {
       color: var(--border);
       margin: 0 0.7rem;
@@ -327,42 +405,42 @@
 
     /* ── Drop zone ───────────────────────────────────────────── */
     .drop-zone {
-      border: 2px dashed var(--accent);
+      border: 2px dashed var(--border);
       border-radius: var(--radius);
-      padding: 2.5rem 1.5rem;
+      padding: 2.75rem 1.5rem;
       text-align: center;
       margin-bottom: 1.25rem;
-      transition: background 0.15s;
+      transition: background 150ms ease, border-color 150ms ease;
       cursor: pointer;
       position: relative;
     }
     .drop-zone:hover,
     .drop-zone.dragover {
-      background: rgba(34, 211, 160, 0.06);
+      background: rgba(212, 146, 74, 0.04);
+      border-color: var(--accent);
     }
     .drop-zone-icon {
       display: block;
       margin: 0 auto 0.75rem;
       color: var(--accent);
+      opacity: 0.7;
     }
     .drop-zone-text {
       color: var(--muted);
       font-size: 0.9rem;
       margin-bottom: 0.5rem;
     }
-    .drop-zone-text strong {
-      color: var(--accent);
-    }
+    .drop-zone-text strong { color: var(--text); }
     .file-badge {
       display: inline-block;
-      background: rgba(34, 211, 160, 0.1);
+      background: rgba(212, 146, 74, 0.1);
       color: var(--accent);
       font-family: var(--font-mono);
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: 600;
-      padding: 0.2rem 0.6rem;
+      padding: 0.2rem 0.55rem;
       border-radius: var(--radius-sm);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.06em;
     }
     .drop-zone input[type="file"] {
       position: absolute;
@@ -377,7 +455,7 @@
       margin-top: 0.75rem;
     }
 
-    /* ── Striped table rows (preview/done) ───────────────────── */
+    /* ── Striped table rows ──────────────────────────────────── */
     .table-striped tbody tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.015);
     }
@@ -393,10 +471,32 @@
       margin: 0 auto 1.25rem;
     }
 
+    /* ── Back nav (shared across detail pages) ───────────────── */
+    .back-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.25rem 0.65rem;
+      margin-bottom: 2rem;
+      text-decoration: none;
+      transition: color 120ms ease, border-color 120ms ease;
+    }
+    .back-nav:hover {
+      color: var(--text);
+      border-color: var(--muted);
+      text-decoration: none;
+      opacity: 1;
+    }
+
     /* ── Utility classes ─────────────────────────────────────── */
     .text-mono { font-family: var(--font-mono); }
-    .positive  { color: var(--accent); }
-    .negative  { color: var(--danger); }
+    .positive  { color: var(--positive); }
+    .negative  { color: var(--negative); }
     .na        { color: var(--muted); font-weight: normal; }
 
     /* ── Keyframes ───────────────────────────────────────────── */
@@ -413,7 +513,7 @@
       to   { opacity: 1; }
     }
     @keyframes flash-highlight {
-      0%   { background: rgba(34, 211, 160, 0.18); }
+      0%   { background: rgba(212, 146, 74, 0.16); }
       100% { background: transparent; }
     }
     @keyframes row-collapse {
@@ -426,22 +526,14 @@
     }
 
     /* ── Shared animation classes ────────────────────────────── */
-    .anim-fade-slide-down {
-      animation: fade-slide-down 350ms ease-out both;
-    }
-    .anim-fade-slide-up {
-      animation: fade-slide-up 400ms ease-out both;
-    }
-    .anim-fade-in {
-      animation: fade-in 500ms ease both;
-    }
+    .anim-fade-slide-down { animation: fade-slide-down 350ms ease-out both; }
+    .anim-fade-slide-up   { animation: fade-slide-up 400ms ease-out both; }
+    .anim-fade-in         { animation: fade-in 500ms ease both; }
     .anim-stagger {
       animation: fade-in 350ms ease both;
       animation-delay: calc(var(--row-index, 0) * 40ms);
     }
-    .anim-flash {
-      animation: flash-highlight 800ms ease-out;
-    }
+    .anim-flash { animation: flash-highlight 800ms ease-out; }
 
     /* ── Button interactions ─────────────────────────────────── */
     .btn-primary:active, .btn-save:active, .btn-confirm:active, .btn-add:active {
@@ -460,20 +552,64 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body>
-  <nav class="nav">
-    <a href="/" class="nav-logo">Terminal Ledger</a>
-    <span class="nav-sep">/</span>
-    <a href="/" class="nav-link">Portfolio</a>
-    <span class="nav-sep">/</span>
-    <a href="/import/pdf" class="nav-link">Import PDF</a>
-    <span class="nav-sep">/</span>
-    <a href="/import/xml" class="nav-link">Import XML</a>
-    <span class="nav-sep">/</span>
-    <a href="/reports" class="nav-link">Reports</a>
-  </nav>
-  <main class="{% block page_class %}page{% endblock %}">
-    {% block content %}{% endblock %}
-  </main>
+  {# Hidden block — child templates override to set active sidebar item #}
+  <template id="active-page-marker">{% block active_page %}portfolio{% endblock %}</template>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a href="/" class="sidebar-logo">
+        <svg class="sidebar-logo-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+        Meridian
+      </a>
+      <nav class="sidebar-nav">
+        <a href="/" class="sidebar-link {% if self.active_page().strip() == 'portfolio' %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          Portfolio
+        </a>
+        <a href="/reports" class="sidebar-link {% if self.active_page().strip() == 'reports' %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          Reports
+        </a>
+        <span class="sidebar-section-label">Import</span>
+        <a href="/import/pdf" class="sidebar-link {% if self.active_page().strip() == 'import-pdf' %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <polyline points="9 15 12 12 15 15"/>
+          </svg>
+          Import PDF
+        </a>
+        <a href="/import/xml" class="sidebar-link {% if self.active_page().strip() == 'import-xml' %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+          Import XML
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="sidebar-version">MERIDIAN · v1.0</span>
+      </div>
+    </aside>
+
+    <main class="{% block page_class %}main-content{% endblock %}">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
