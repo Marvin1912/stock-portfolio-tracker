@@ -29,10 +29,16 @@ async def portfolio_overview(
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     """Render the portfolio overview page."""
-    summary = await PortfolioService().get_summary(db)
+    service = PortfolioService()
+    summary = await service.get_summary(db)
 
     last_refresh_result = await db.execute(select(func.max(PriceCache.date)))
     last_refresh: datetime.date | None = last_refresh_result.scalar()
+
+    current_year = datetime.date.today().year
+    earliest = await service.earliest_transaction_date(db)
+    earliest_year = earliest.year if earliest else current_year
+    chart_years = list(range(current_year, earliest_year - 1, -1))
 
     return templates.TemplateResponse(
         request=request,
@@ -42,5 +48,7 @@ async def portfolio_overview(
             "total_value": summary.total_value,
             "holdings_count": len(summary.holdings),
             "last_refresh": last_refresh,
+            "chart_years": chart_years,
+            "current_year": current_year,
         },
     )
