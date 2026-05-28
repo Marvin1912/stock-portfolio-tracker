@@ -6,7 +6,7 @@ import datetime
 
 import plotly.graph_objects as go
 import plotly.io as pio
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,11 +61,18 @@ async def _get_or_404(holding_id: int, db: AsyncSession) -> Holding:
 @router.get("/chart/performance")
 async def get_performance_chart(
     db: AsyncSession = _DB,
+    year: int | None = Query(None),
 ) -> Response:
     """Return a Plotly line chart of total portfolio value since the first transaction."""
     service = PortfolioService()
-    since = await service.earliest_transaction_date(db)
+    if year is not None:
+        since: datetime.date | None = datetime.date(year, 1, 1)
+        until = min(datetime.date(year, 12, 31), datetime.date.today())
+    else:
+        since = await service.earliest_transaction_date(db)
+        until = datetime.date.today()
     performance = await service.get_performance_history(db, since=since)
+    performance = [(d, v) for d, v in performance if d <= until]
 
     if not performance:
         return JSONResponse(content={})
@@ -101,9 +108,14 @@ async def get_performance_chart(
 @router.get("/chart/gain-loss")
 async def get_gain_loss_chart(
     db: AsyncSession = _DB,
+    year: int | None = Query(None),
 ) -> Response:
     """Return a Plotly line chart of Total P/L since the first transaction."""
     history = await PortfolioService().get_gain_loss_history(db)
+    if year is not None:
+        since_d = datetime.date(year, 1, 1)
+        until_d = min(datetime.date(year, 12, 31), datetime.date.today())
+        history = [(d, v) for d, v in history if since_d <= d <= until_d]
 
     if not history:
         return JSONResponse(content={})
