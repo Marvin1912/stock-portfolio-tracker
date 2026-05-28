@@ -7,10 +7,11 @@ recompute whenever transactions are added or changed.
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Iterable
 from decimal import Decimal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import Date, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.holding import Holding
@@ -109,4 +110,33 @@ async def net_shares_by_stock(
     return await _net_positions(db, stock_ids)
 
 
-__all__ = ["recompute_holdings", "net_shares_by_stock"]
+async def net_shares_as_of_date(
+    db: AsyncSession,
+    as_of: datetime.date,
+    stock_ids: Iterable[int] | None = None,
+) -> dict[int, Decimal]:
+    """Return ``{stock_id: net_shares}`` considering only transactions with date <= as_of."""
+    signed = case(
+        (Transaction.type.in_(_POSITIVE), Transaction.shares),
+        (Transaction.type.in_(_NEGATIVE), -Transaction.shares),
+        else_=Decimal("0"),
+    )
+    stmt = (
+        select(Transaction.stock_id, func.coalesce(func.sum(signed), 0))
+        .where(
+            Transaction.stock_id.is_not(None),
+            cast(Transaction.date, Date) <= as_of,
+        )
+        .group_by(Transaction.stock_id)
+    )
+    id_list = list(stock_ids) if stock_ids is not None else None
+    if id_list is not None:
+        if not id_list:
+            return {}
+        stmt = stmt.where(Transaction.stock_id.in_(id_list))
+
+    result = await db.execute(stmt)
+    return {sid: Decimal(net or 0) for sid, net in result.all() if sid is not None}
+
+
+__all__ = ["recompute_holdings", "net_shares_by_stock", "net_shares_as_of_date"]

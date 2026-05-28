@@ -11,10 +11,11 @@ from decimal import Decimal
 from jinja2 import Environment, PackageLoader, select_autoescape
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models.holding import Holding
 from app.models.price_cache import PriceCache
+from app.models.stock import Stock
+from app.services.fx_service import to_eur
+from app.services.holdings_service import net_shares_as_of_date
 
 logger = logging.getLogger(__name__)
 
@@ -109,13 +110,24 @@ class ReportService:
         period_end: datetime.date,
     ) -> MonthlyReportData | None:
         """Core report-building logic shared by all public methods."""
-        rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
-        holdings = rows.scalars().all()
+        start_of_period = period_start - datetime.timedelta(days=1)
 
-        if not holdings:
+        # Historical quantities: what did the portfolio look like at the period
+        # boundaries?  Using current holdings would misrepresent months where
+        # shares were bought or sold mid-period.
+        start_positions = await net_shares_as_of_date(db, start_of_period)
+        end_positions = await net_shares_as_of_date(db, period_end)
+
+        all_stock_ids = set(start_positions) | set(end_positions)
+        if not all_stock_ids:
             return None
 
-        tickers = [h.stock.ticker for h in holdings]
+        stocks_result = await db.execute(
+            select(Stock).where(Stock.id.in_(list(all_stock_ids)))
+        )
+        stocks: dict[int, Stock] = {s.id: s for s in stocks_result.scalars().all()}
+
+        tickers = [s.ticker for s in stocks.values()]
 
         price_rows = await db.execute(
             select(PriceCache.ticker, PriceCache.date, PriceCache.close_price)
@@ -134,19 +146,27 @@ class ReportService:
         total_value_1st: Decimal | None = None
         total_value_last: Decimal | None = None
 
-        for h in holdings:
-            ticker = h.stock.ticker
+        for sid in sorted(all_stock_ids):
+            stock = stocks.get(sid)
+            if stock is None:
+                continue
+
+            ticker = stock.ticker
+            currency = stock.currency
+            qty_start = start_positions.get(sid, Decimal("0"))
+            qty_end = end_positions.get(sid, Decimal("0"))
+
             ticker_prices = prices.get(ticker, {})
 
             price_1st: Decimal | None = None
             price_last: Decimal | None = None
 
             if ticker_prices:
-                price_1st = ticker_prices[min(ticker_prices)]
-                price_last = ticker_prices[max(ticker_prices)]
+                price_1st = to_eur(ticker_prices[min(ticker_prices)], currency)
+                price_last = to_eur(ticker_prices[max(ticker_prices)], currency)
 
-            value_1st = h.quantity * price_1st if price_1st is not None else None
-            value_last = h.quantity * price_last if price_last is not None else None
+            value_1st = qty_start * price_1st if price_1st is not None else None
+            value_last = qty_end * price_last if price_last is not None else None
 
             delta_eur: Decimal | None = None
             delta_pct: Decimal | None = None
@@ -165,8 +185,8 @@ class ReportService:
             lines.append(
                 StockReportLine(
                     ticker=ticker,
-                    name=h.stock.name,
-                    quantity=h.quantity,
+                    name=stock.name,
+                    quantity=qty_end,
                     price_1st=price_1st,
                     price_last=price_last,
                     value_1st=value_1st,
