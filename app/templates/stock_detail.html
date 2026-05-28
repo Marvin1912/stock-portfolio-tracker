@@ -1,42 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}{{ stock.ticker }} — Terminal Ledger{% endblock %}
+{% block title %}{{ stock.ticker }} — Meridian{% endblock %}
+{% block active_page %}portfolio{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
-  /* ── Back nav ────────────────────────────────────────────────── */
-  .back-nav {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.25rem 0.65rem;
-    margin-bottom: 2rem;
-    text-decoration: none;
-    transition: color 120ms ease, border-color 120ms ease;
-  }
-  .back-nav:hover {
-    color: var(--text);
-    border-color: var(--muted);
-    text-decoration: none;
-    opacity: 1;
-  }
-
   /* ── Instrument header ───────────────────────────────────────── */
-  .instrument-header {
-    margin-bottom: 2rem;
-  }
+  .instrument-header { margin-bottom: 2rem; }
   .instrument-ticker {
-    font-family: var(--font-mono);
-    font-size: 2.8rem;
+    font-family: var(--font-display);
+    font-size: 3.5rem;
     font-weight: 600;
     color: var(--text);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.01em;
     line-height: 1;
     margin-bottom: 0.3rem;
   }
@@ -52,7 +29,7 @@
     background: linear-gradient(to right, var(--accent), transparent);
     border: none;
     margin: 0;
-    opacity: 0.5;
+    opacity: 0.45;
   }
 
   /* ── Stats strip ─────────────────────────────────────────────── */
@@ -73,7 +50,7 @@
   }
   .stat-label {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -82,7 +59,7 @@
     font-family: var(--font-mono);
     font-size: 1.35rem;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--text);
     line-height: 1.1;
   }
   .stat-value.na {
@@ -99,11 +76,11 @@
     margin-bottom: 1.5rem;
   }
   .chart-card-title {
-    font-family: var(--font-ui);
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.7rem;
+    letter-spacing: 0.08em;
     color: var(--muted);
     margin-bottom: 1rem;
   }
@@ -118,9 +95,7 @@
     padding: 3rem 2rem;
     color: var(--muted);
   }
-  .no-data-icon {
-    opacity: 0.3;
-  }
+  .no-data-icon { opacity: 0.25; }
   .no-data-text {
     font-family: var(--font-mono);
     font-size: 0.85rem;
@@ -130,58 +105,46 @@
 
   @media (max-width: 600px) {
     .stats-strip { grid-template-columns: 1fr; }
-    .instrument-ticker { font-size: 2rem; }
+    .instrument-ticker { font-size: 2.5rem; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 
-  <!-- Back navigation -->
   <a href="/" class="back-nav">&larr; Portfolio</a>
 
-  <!-- Instrument header -->
   <div class="instrument-header">
     <div class="instrument-ticker">{{ stock.ticker }}</div>
     <div class="instrument-name">{{ stock.name }}</div>
     <hr class="instrument-sep">
   </div>
 
-  <!-- Stats strip -->
   <div class="stats-strip">
     <div class="stat-card anim-fade-slide-up" style="animation-delay: 0ms">
       <span class="stat-label">Quantity</span>
       <span class="stat-value{% if stock.quantity is none %} na{% endif %}">
-        {% if stock.quantity is not none %}
-          {{ stock.quantity }}
-        {% else %}
-          —
-        {% endif %}
+        {% if stock.quantity is not none %}{{ stock.quantity }}{% else %}—{% endif %}
       </span>
     </div>
     <div class="stat-card anim-fade-slide-up" style="animation-delay: 80ms">
       <span class="stat-label">Current Price</span>
       <span class="stat-value{% if stock.current_price is none %} na{% endif %}">
         {% if stock.current_price is not none %}
-          {{ "%.2f"|format(stock.current_price) }} <small style="font-size:0.75em;color:var(--muted);">EUR</small>
-        {% else %}
-          —
-        {% endif %}
+          {{ "%.2f"|format(stock.current_price) }} <small style="font-size:0.7em;color:var(--muted);">EUR</small>
+        {% else %}—{% endif %}
       </span>
     </div>
     <div class="stat-card anim-fade-slide-up" style="animation-delay: 160ms">
       <span class="stat-label">Current Value</span>
       <span class="stat-value{% if stock.current_value is none %} na{% endif %}">
         {% if stock.current_value is not none %}
-          {{ "%.2f"|format(stock.current_value) }} <small style="font-size:0.75em;color:var(--muted);">EUR</small>
-        {% else %}
-          —
-        {% endif %}
+          {{ "%.2f"|format(stock.current_value) }} <small style="font-size:0.7em;color:var(--muted);">EUR</small>
+        {% else %}—{% endif %}
       </span>
     </div>
   </div>
 
-  <!-- Price history chart -->
   <div class="chart-card anim-fade-in" style="animation-delay: 200ms">
     <div class="chart-card-title">Price History &middot; 1Y</div>
     <div id="price-history-chart" style="height: 300px;"></div>
@@ -194,58 +157,51 @@
   (async () => {
     const resp = await fetch('/api/v1/stocks/{{ stock.ticker }}/chart/price-history');
     const fig = await resp.json();
-
     const container = document.getElementById('price-history-chart');
 
     if (fig && fig.data && fig.data.length) {
-      // Apply dark theme and green line with fill
       const trace = Object.assign({}, fig.data[0], {
-        line: { color: '#22d3a0', width: 2 },
+        line: { color: '#D4924A', width: 2 },
         fill: 'tozeroy',
-        fillcolor: 'rgba(34, 211, 160, 0.07)',
+        fillcolor: 'rgba(212, 146, 74, 0.07)',
         mode: 'lines',
       });
-
       const layout = {
-        paper_bgcolor: '#161b22',
-        plot_bgcolor: '#161b22',
+        paper_bgcolor: '#141210',
+        plot_bgcolor:  '#141210',
         margin: { t: 10, b: 40, l: 60, r: 10 },
-        font: { color: '#8b949e', family: "'JetBrains Mono', monospace", size: 11 },
+        font: { color: '#8A8178', family: "'JetBrains Mono', monospace", size: 11 },
         xaxis: {
           showgrid: false,
           zeroline: false,
-          tickcolor: '#30363d',
-          linecolor: '#30363d',
-          tickfont: { color: '#8b949e' },
+          tickcolor: '#2C2825',
+          linecolor: '#2C2825',
+          tickfont: { color: '#8A8178' },
         },
         yaxis: {
           showgrid: true,
-          gridcolor: '#30363d',
+          gridcolor: '#2C2825',
           zeroline: false,
           tickformat: ',.2f',
-          tickfont: { color: '#8b949e' },
+          tickfont: { color: '#8A8178' },
         },
         hovermode: 'x unified',
         hoverlabel: {
-          bgcolor: '#0d1117',
-          bordercolor: '#30363d',
-          font: { color: '#e6edf3', family: "'JetBrains Mono', monospace" },
+          bgcolor: '#0A0908',
+          bordercolor: '#2C2825',
+          font: { color: '#F2EDE4', family: "'JetBrains Mono', monospace" },
         },
       };
-
-      Plotly.newPlot(container, [trace], layout, {
-        responsive: true,
-        displayModeBar: false,
-      });
+      Plotly.newPlot(container, [trace], layout, { responsive: true, displayModeBar: false });
     } else {
       container.innerHTML = `
         <div class="no-data-state">
-          <svg class="no-data-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="32" width="8" height="12" rx="1" fill="#8b949e"/>
-            <rect x="16" y="22" width="8" height="22" rx="1" fill="#8b949e"/>
-            <rect x="28" y="14" width="8" height="30" rx="1" fill="#8b949e"/>
-            <rect x="40" y="8" width="4" height="36" rx="1" fill="#8b949e"/>
-            <line x1="4" y1="36" x2="44" y2="36" stroke="#30363d" stroke-width="1"/>
+          <svg class="no-data-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect x="4" y="32" width="8" height="12" rx="1" fill="#8A8178"/>
+            <rect x="16" y="22" width="8" height="22" rx="1" fill="#8A8178"/>
+            <rect x="28" y="14" width="8" height="30" rx="1" fill="#8A8178"/>
+            <rect x="40" y="8" width="4" height="36" rx="1" fill="#8A8178"/>
+            <line x1="4" y1="36" x2="44" y2="36" stroke="#2C2825" stroke-width="1"/>
           </svg>
           <span class="no-data-text">// no price history available &mdash; data is refreshed daily</span>
         </div>`;

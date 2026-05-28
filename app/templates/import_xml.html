@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Import Portfolio Performance XML{% endblock %}
+{% block title %}Import XML — Meridian{% endblock %}
 
-{% block page_class %}page{% if step == "preview" %} page--wide{% endif %}{% endblock %}
+{% block page_class %}main-content{% if step == "preview" %} main-content--wide{% endif %}{% endblock %}
+{% block active_page %}import-xml{% endblock %}
 
 {% block content %}
-  <p style="margin-bottom: 0.75rem;"><a href="/">&larr; Back to portfolio</a></p>
+  <a href="/" class="back-nav">&larr; Portfolio</a>
   <h1>Import Portfolio Performance XML</h1>
 
   <div class="step-indicator">
