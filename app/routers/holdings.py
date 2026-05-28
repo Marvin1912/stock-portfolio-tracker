@@ -91,7 +91,11 @@ async def get_performance_chart(
         plot_bgcolor="#fff",
         paper_bgcolor="#fff",
     )
-    return Response(content=pio.to_json(fig), media_type="application/json")
+    return Response(
+        content=pio.to_json(fig),
+        media_type="application/json",
+        headers={"Cache-Control": "max-age=300, private"},
+    )
 
 
 @router.get("/chart/gain-loss")
@@ -127,7 +131,11 @@ async def get_gain_loss_chart(
         plot_bgcolor="#fff",
         paper_bgcolor="#fff",
     )
-    return Response(content=pio.to_json(fig), media_type="application/json")
+    return Response(
+        content=pio.to_json(fig),
+        media_type="application/json",
+        headers={"Cache-Control": "max-age=300, private"},
+    )
 
 
 @router.get("/chart/allocation")
@@ -158,7 +166,10 @@ async def get_allocation_chart(
         margin={"t": 20, "b": 20, "l": 20, "r": 20},
         showlegend=True,
     )
-    return JSONResponse(content=fig.to_dict())
+    return JSONResponse(
+        content=fig.to_dict(),
+        headers={"Cache-Control": "max-age=300, private"},
+    )
 
 
 @router.get("/summary", response_model=PortfolioSummary)

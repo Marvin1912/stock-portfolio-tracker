@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
 from app.models.stock import ASSET_TYPE_CRYPTO, ASSET_TYPE_STOCK, Stock
-from app.services import import_cache
+from app.services import chart_cache, import_cache
 from app.services.holdings_service import recompute_holdings
 from app.services.portfolio_performance_importer import (
     ParseResult,
@@ -151,6 +151,7 @@ async def import_xml_confirm(
         await ensure_prices_cached(list(ticker_rows.scalars().all()), db)
 
     import_cache.delete(token)
+    chart_cache.invalidate()
 
     return _render(
         request,

@@ -19,6 +19,13 @@ from httpx import ASGITransport, AsyncClient
 from app.config import Settings
 from app.database import get_async_session
 from app.main import create_app
+from app.services import chart_cache
+
+
+@pytest.fixture(autouse=True)
+def clear_chart_cache() -> None:
+    """Reset the chart cache before every test to prevent cross-test pollution."""
+    chart_cache.invalidate()
 
 
 def _make_test_settings() -> Settings:
