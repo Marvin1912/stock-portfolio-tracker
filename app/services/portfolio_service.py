@@ -21,6 +21,7 @@ from app.models.transaction import (
     Transaction,
 )
 from app.schemas.holdings import HoldingSummaryItem, PortfolioSummary
+from app.services import chart_cache
 from app.services.fx_service import to_eur
 
 _POSITION_TYPES = ("BUY", "SELL", "TRANSFER_IN", "TRANSFER_OUT")
@@ -69,6 +70,10 @@ class PortfolioService:
         price contribute ``None`` for their value and are excluded from
         the ``total_value`` sum.
         """
+        cached = chart_cache.get("summary")
+        if cached is not None:
+            return cached
+
         rows = await db.execute(select(Holding).options(selectinload(Holding.stock)))
         holdings = rows.scalars().all()
 
@@ -99,7 +104,9 @@ class PortfolioService:
                 )
             )
 
-        return PortfolioSummary(holdings=items, total_value=total_value)
+        result = PortfolioSummary(holdings=items, total_value=total_value)
+        chart_cache.set("summary", result)
+        return result
 
     async def get_performance_history(
         self, db: AsyncSession, since: datetime.date | None = None
@@ -124,6 +131,11 @@ class PortfolioService:
         3. Multiply the running positions by the cached close price on
            date *d*, convert to EUR via the FX cache, and sum.
         """
+        cache_key = f"performance:{since}"
+        cached = chart_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         event_rows = await db.execute(
             select(
                 Transaction.stock_id,
@@ -213,6 +225,7 @@ class PortfolioService:
 
             performance.append((date, total))
 
+        chart_cache.set(cache_key, performance)
         return performance
 
     @staticmethod
@@ -255,6 +268,10 @@ class PortfolioService:
         forward-filled market-value walk used by the Performance chart, but
         spans from the earliest transaction rather than the trailing year.
         """
+        cached = chart_cache.get("gain_loss")
+        if cached is not None:
+            return cached
+
         since = await self.earliest_transaction_date(db)
         market_values = await self.get_performance_history(db, since=since)
         if not market_values:
@@ -291,6 +308,7 @@ class PortfolioService:
                 ptr += 1
             gain_loss.append((date, market_value - net_invested))
 
+        chart_cache.set("gain_loss", gain_loss)
         return gain_loss
 
     async def earliest_transaction_date(
