@@ -13,11 +13,11 @@
       <span class="step-num">1</span> Upload
     </span>
     <span class="step-arrow">&rarr;</span>
-    <span class="step-item {{ 'active' if step == 'preview' else ('completed' if step == 'done' else '') }}">
+    <span class="step-item {{ 'active' if step in ('preview', 'preview_trade', 'preview_batch') else ('completed' if step in ('done', 'done_batch') else '') }}">
       <span class="step-num">2</span> Preview
     </span>
     <span class="step-arrow">&rarr;</span>
-    <span class="step-item {{ 'active' if step == 'done' else '' }}">
+    <span class="step-item {{ 'active' if step in ('done', 'done_batch') else '' }}">
       <span class="step-num">3</span> Done
     </span>
   </div>
@@ -39,9 +39,9 @@
           <line x1="12" y1="18" x2="12" y2="12"/>
           <polyline points="9 15 12 12 15 15"/>
         </svg>
-        <p class="drop-zone-text">Drag &amp; drop your PDF here or <strong>click to browse</strong></p>
+        <p class="drop-zone-text">Drag &amp; drop one or more PDFs here or <strong>click to browse</strong></p>
         <span class="file-badge">.PDF</span>
-        <input type="file" id="file" name="file" accept=".pdf" required>
+        <input type="file" id="file-input" name="files" accept=".pdf" multiple required>
         <p class="selected-file" id="selected-file"></p>
       </div>
       <button type="submit" class="btn-primary">Upload &amp; Preview</button>
@@ -141,9 +141,113 @@
     </form>
   </div>
 
+  {% elif step == "preview_batch" %}
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Batch overview: duplicate check across all uploaded PDFs            -->
+  <!-- ------------------------------------------------------------------ -->
+  {% set ns = namespace(new_count=0, dup_count=0, err_count=0) %}
+  {% for item in items %}
+    {% if item.parse_error %}
+      {% set ns.err_count = ns.err_count + 1 %}
+    {% elif item.is_duplicate == true %}
+      {% set ns.dup_count = ns.dup_count + 1 %}
+    {% else %}
+      {% set ns.new_count = ns.new_count + 1 %}
+    {% endif %}
+  {% endfor %}
+
+  <div class="card">
+    <h2>Batch overview — {{ items | length }} file(s)</h2>
+    <p class="note">
+      Review the trades extracted from your PDFs. Pre-checked entries will be imported;
+      duplicates and unresolved trades are unchecked by default.
+    </p>
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+      {% if ns.new_count %}
+      <span style="color: var(--positive); font-weight: 600;">{{ ns.new_count }} new</span>
+      {% endif %}
+      {% if ns.dup_count %}
+      <span style="color: var(--accent); font-weight: 600;">{{ ns.dup_count }} duplicate{{ 's' if ns.dup_count != 1 }}</span>
+      {% endif %}
+      {% if ns.err_count %}
+      <span style="color: var(--negative); font-weight: 600;">{{ ns.err_count }} error{{ 's' if ns.err_count != 1 }}</span>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/import/pdf/confirm-batch">
+      <input type="hidden" name="token" value="{{ token }}">
+      <div style="overflow-x: auto;">
+        <table class="table-striped">
+          <thead>
+            <tr>
+              <th style="width: 2rem;"></th>
+              <th>File</th>
+              <th>Type</th>
+              <th>Ticker</th>
+              <th class="number">Shares</th>
+              <th class="number">Amount</th>
+              <th>Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            {% set idx = loop.index0 %}
+            <tr>
+              {% if item.parse_error %}
+              <td><input type="checkbox" name="selected" value="{{ idx }}" disabled></td>
+              <td style="color: var(--text-muted); font-size: 0.875rem;">{{ item.filename }}</td>
+              <td colspan="5" style="color: var(--negative); font-size: 0.875rem;">{{ item.parse_error }}</td>
+              <td><span class="status-badge status-error">Error</span></td>
+              {% elif item.trade is not none %}
+              <td><input type="checkbox" name="selected" value="{{ idx }}"{% if item.is_duplicate != true and item.ticker %} checked{% endif %}{% if not item.ticker %} disabled{% endif %}></td>
+              <td style="font-size: 0.875rem; color: var(--text-muted);">{{ item.filename }}</td>
+              <td>{{ item.trade.trade_type }}</td>
+              <td>
+                {% if item.ticker %}
+                  <strong>{{ item.ticker }}</strong>
+                {% else %}
+                  <span style="color: var(--negative);">—</span>
+                {% endif %}
+              </td>
+              <td class="number">{{ item.trade.shares }}</td>
+              <td class="number">{{ item.trade.currency }} {{ item.trade.amount }}</td>
+              <td>{{ item.trade.date.date() }}</td>
+              <td>
+                {% if not item.ticker %}
+                  <span class="status-badge status-error">Unresolved</span>
+                {% elif item.is_duplicate == true %}
+                  <span class="status-badge status-duplicate">Duplicate</span>
+                {% else %}
+                  <span class="status-badge status-new">New</span>
+                {% endif %}
+              </td>
+              {% else %}
+              <td><input type="checkbox" name="selected" value="{{ idx }}" checked></td>
+              <td style="font-size: 0.875rem; color: var(--text-muted);">{{ item.filename }}</td>
+              <td>—</td>
+              <td>—</td>
+              <td class="number">{{ item.pairs | length }} holdings</td>
+              <td>—</td>
+              <td>—</td>
+              <td><span class="status-badge status-new">New</span></td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="actions" style="margin-top: 1.25rem;">
+        <button type="submit" class="btn-primary">Import Selected</button>
+        <a href="/import/pdf"><button type="button" class="btn-ghost">Cancel</button></a>
+      </div>
+    </form>
+  </div>
+
   {% elif step == "done" %}
   <!-- ------------------------------------------------------------------ -->
-  <!-- Success / error summary                                              -->
+  <!-- Success / error summary (single-file)                               -->
   <!-- ------------------------------------------------------------------ -->
   <div class="card" style="text-align: center;">
     <h2>Import complete</h2>
@@ -186,6 +290,47 @@
       <a href="/import/pdf"><button type="button" class="btn-ghost">Import another PDF</button></a>
     </div>
   </div>
+
+  {% elif step == "done_batch" %}
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Batch import summary                                                 -->
+  <!-- ------------------------------------------------------------------ -->
+  <div class="card" style="text-align: center;">
+    <h2>Import complete</h2>
+    {% if created > 0 %}
+    <div class="done-icon">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--positive)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="9 12 11.5 14.5 16 10"/>
+      </svg>
+    </div>
+    {% else %}
+    <div class="done-icon">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </div>
+    {% endif %}
+    <ul style="list-style: none; padding: 0; margin: 1rem 0; font-size: 1rem;">
+      <li style="margin-bottom: 0.4rem;">
+        <strong style="color: var(--positive);">{{ created }}</strong> transaction{{ 's' if created != 1 }} imported
+      </li>
+      <li style="margin-bottom: 0.4rem;">
+        <strong style="color: var(--accent);">{{ duplicates }}</strong> duplicate{{ 's' if duplicates != 1 }} skipped
+      </li>
+      {% if errors %}
+      <li>
+        <strong style="color: var(--negative);">{{ errors }}</strong> error{{ 's' if errors != 1 }}
+      </li>
+      {% endif %}
+    </ul>
+    <div class="actions" style="justify-content: center; margin-top: 1rem;">
+      <a href="/"><button type="button" class="btn-primary">Back to portfolio</button></a>
+      <a href="/import/pdf"><button type="button" class="btn-ghost">Import more PDFs</button></a>
+    </div>
+  </div>
   {% endif %}
 {% endblock %}
 
@@ -197,6 +342,16 @@
     var input = zone.querySelector('input[type="file"]');
     var label = document.getElementById("selected-file");
 
+    function updateLabel(files) {
+      if (!files || !files.length) {
+        label.textContent = "";
+      } else if (files.length === 1) {
+        label.textContent = files[0].name;
+      } else {
+        label.textContent = files.length + " files selected";
+      }
+    }
+
     zone.addEventListener("dragover", function (e) { e.preventDefault(); zone.classList.add("dragover"); });
     zone.addEventListener("dragleave", function () { zone.classList.remove("dragover"); });
     zone.addEventListener("drop", function (e) {
@@ -204,11 +359,11 @@
       zone.classList.remove("dragover");
       if (e.dataTransfer.files.length) {
         input.files = e.dataTransfer.files;
-        label.textContent = e.dataTransfer.files[0].name;
+        updateLabel(e.dataTransfer.files);
       }
     });
     input.addEventListener("change", function () {
-      label.textContent = input.files.length ? input.files[0].name : "";
+      updateLabel(input.files);
     });
   })();
 </script>
