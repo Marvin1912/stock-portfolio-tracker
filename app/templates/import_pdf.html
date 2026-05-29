@@ -341,6 +341,10 @@
     if (!zone) return;
     var input = zone.querySelector('input[type="file"]');
     var label = document.getElementById("selected-file");
+    // Native file inputs replace their FileList on every selection, so both
+    // drops and browse-dialog picks would otherwise override each other. Keep
+    // our own DataTransfer and sync it back to the input so files accumulate.
+    var store = new DataTransfer();
 
     function updateLabel(files) {
       if (!files || !files.length) {
@@ -357,18 +361,31 @@
       }
     }
 
+    function addFiles(list) {
+      for (var i = 0; i < list.length; i++) {
+        var f = list[i];
+        var dup = false;
+        for (var j = 0; j < store.files.length; j++) {
+          if (store.files[j].name === f.name && store.files[j].size === f.size) {
+            dup = true;
+            break;
+          }
+        }
+        if (!dup) store.items.add(f);
+      }
+      input.files = store.files;
+      updateLabel(store.files);
+    }
+
     zone.addEventListener("dragover", function (e) { e.preventDefault(); zone.classList.add("dragover"); });
     zone.addEventListener("dragleave", function () { zone.classList.remove("dragover"); });
     zone.addEventListener("drop", function (e) {
       e.preventDefault();
       zone.classList.remove("dragover");
-      if (e.dataTransfer.files.length) {
-        input.files = e.dataTransfer.files;
-        updateLabel(e.dataTransfer.files);
-      }
+      if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
     });
     input.addEventListener("change", function () {
-      updateLabel(input.files);
+      addFiles(input.files);
     });
   })();
 </script>
