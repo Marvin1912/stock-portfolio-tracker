@@ -34,7 +34,7 @@ async def test_import_pdf_get_renders_upload_form(client: AsyncClient) -> None:
 async def test_import_pdf_post_non_pdf_returns_error(client: AsyncClient) -> None:
     response = await client.post(
         "/import/pdf",
-        files={"file": ("report.txt", b"not a pdf", "text/plain")},
+        files=[("files", ("report.txt", b"not a pdf", "text/plain"))],
     )
     assert response.status_code == 200
     assert "valid PDF" in response.text
@@ -44,7 +44,7 @@ async def test_import_pdf_post_non_pdf_returns_error(client: AsyncClient) -> Non
 async def test_import_pdf_post_unreadable_pdf_returns_error(client: AsyncClient) -> None:
     response = await client.post(
         "/import/pdf",
-        files={"file": ("bad.pdf", b"garbage data", "application/pdf")},
+        files=[("files", ("bad.pdf", b"garbage data", "application/pdf"))],
     )
     assert response.status_code == 200
     assert "Unrecognized PDF" in response.text or "No holdings" in response.text
@@ -55,7 +55,7 @@ async def test_import_pdf_post_valid_pdf_shows_preview(client: AsyncClient) -> N
     pdf_bytes = FIXTURE_PDF.read_bytes()
     response = await client.post(
         "/import/pdf",
-        files={"file": ("holdings.pdf", pdf_bytes, "application/pdf")},
+        files=[("files", ("holdings.pdf", pdf_bytes, "application/pdf"))],
     )
     assert response.status_code == 200
     assert "Preview extracted holdings" in response.text
@@ -68,7 +68,7 @@ async def test_import_pdf_post_valid_pdf_shows_all_tickers(client: AsyncClient) 
     pdf_bytes = FIXTURE_PDF.read_bytes()
     response = await client.post(
         "/import/pdf",
-        files={"file": ("holdings.pdf", pdf_bytes, "application/pdf")},
+        files=[("files", ("holdings.pdf", pdf_bytes, "application/pdf"))],
     )
     assert "AAPL" in response.text
     assert "MSFT" in response.text

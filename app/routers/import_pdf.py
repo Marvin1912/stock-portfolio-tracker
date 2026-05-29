@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
 from app.models.transaction import TX_TYPE_BUY
+from app.services.batch_pdf_cache import BatchPdfItem
+from app.services import batch_pdf_cache
 from app.services.comdirect_parser import ComdirectParser, ParsedTrade
 from app.services.generic_parser import GenericTableParser
 from app.services.import_service import ImportService
@@ -66,16 +68,35 @@ async def import_pdf_page(request: Request) -> HTMLResponse:
 @router.post("/pdf", response_class=HTMLResponse)
 async def import_pdf_preview(
     request: Request,
-    file: UploadFile,
+    files: list[UploadFile],
+    db: AsyncSession = _DB,
 ) -> HTMLResponse:
-    """Accept a broker PDF, extract holdings, and show a preview."""
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
+    """Accept one or more broker PDFs, extract trades/holdings, and show a preview."""
+    if not files or all(not f.filename for f in files):
         return _render(
             request,
             "import_pdf.html",
-            {"step": "upload", "error": "Please upload a valid PDF file."},
+            {"step": "upload", "error": "Please upload at least one PDF file."},
         )
 
+    invalid = [f.filename for f in files if f.filename and not f.filename.lower().endswith(".pdf")]
+    if invalid:
+        return _render(
+            request,
+            "import_pdf.html",
+            {"step": "upload", "error": f"Please upload valid PDF files only. Not accepted: {', '.join(invalid)}"},
+        )
+
+    # Single-file path — existing flow, untouched.
+    if len(files) == 1:
+        return await _handle_single_file(request, files[0])
+
+    # Multi-file batch path.
+    return await _handle_batch(request, files, db)
+
+
+async def _handle_single_file(request: Request, file: UploadFile) -> HTMLResponse:
+    """Original single-file flow: comdirect trade or generic holdings preview."""
     contents = await file.read()
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -120,6 +141,75 @@ async def import_pdf_preview(
         request,
         "import_pdf.html",
         {"step": "preview", "pairs": pairs},
+    )
+
+
+async def _handle_batch(
+    request: Request,
+    files: list[UploadFile],
+    db: AsyncSession,
+) -> HTMLResponse:
+    """Parse multiple PDFs, check duplicates, cache results, and show batch overview."""
+    key = getattr(getattr(request.app.state, "settings", None), "openfigi_api_key", "")
+    items: list[BatchPdfItem] = []
+
+    for file in files:
+        filename = file.filename or "unknown.pdf"
+        contents = await file.read()
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(contents)
+            tmp_path = Path(tmp.name)
+
+        trade: ParsedTrade | None = None
+        pairs: list[tuple[str, Decimal]] | None = None
+        parse_error: str | None = None
+
+        try:
+            trade = _comdirect.extract_trade(tmp_path)
+            if trade is None:
+                pairs = _parser.extract(tmp_path) or None
+                if pairs is None:
+                    parse_error = "No holdings found in this PDF."
+        except Exception as exc:
+            parse_error = f"Could not parse: {exc}"
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        ticker: str | None = None
+        is_duplicate: bool | None = None
+
+        if trade is not None:
+            t0 = time.perf_counter()
+            if trade.wkn:
+                ticker = await resolve_wkn(trade.wkn, key)
+            if ticker is None and trade.isin:
+                ticker = await resolve_isin(trade.isin, key)
+            logger.info(
+                "PDF batch import: ticker resolution for %s took %.2fs -> %s",
+                filename,
+                time.perf_counter() - t0,
+                ticker,
+            )
+            if ticker is not None:
+                is_duplicate = await _service.check_is_duplicate(trade, ticker, db)
+
+        items.append(
+            BatchPdfItem(
+                filename=filename,
+                trade=trade,
+                ticker=ticker,
+                is_duplicate=is_duplicate,
+                pairs=pairs,
+                parse_error=parse_error,
+            )
+        )
+
+    token = batch_pdf_cache.store(items)
+    return _render(
+        request,
+        "import_pdf.html",
+        {"step": "preview_batch", "items": items, "token": token, "enumerate": enumerate},
     )
 
 
@@ -259,4 +349,60 @@ async def import_pdf_confirm_trade(
         request,
         "import_pdf.html",
         {"step": "done", "processed": processed, "message": messages.get(status)},
+    )
+
+
+@router.post("/pdf/confirm-batch", response_class=HTMLResponse)
+async def import_pdf_confirm_batch(
+    request: Request,
+    token: Annotated[str, Form()],
+    selected: Annotated[list[int], Form()] = [],
+    db: AsyncSession = _DB,
+) -> HTMLResponse:
+    """Import the user-selected trades from the batch preview."""
+    preview = batch_pdf_cache.get(token)
+    if preview is None:
+        return _render(
+            request,
+            "import_pdf.html",
+            {"step": "upload", "error": "Preview session expired. Please re-upload your PDFs."},
+        )
+
+    created = 0
+    duplicates = 0
+    errors = 0
+
+    for idx in selected:
+        if idx < 0 or idx >= len(preview.items):
+            continue
+        item = preview.items[idx]
+
+        if item.parse_error:
+            errors += 1
+            continue
+
+        if item.trade is not None:
+            ticker = item.ticker or ""
+            if not ticker:
+                errors += 1
+                continue
+            status = await _service.import_trade(item.trade, ticker, db)
+            if status == "created":
+                created += 1
+            elif status == "duplicate":
+                duplicates += 1
+            else:
+                errors += 1
+        elif item.pairs is not None:
+            processed = await _service.import_from_holdings(item.pairs, db, source_file=item.filename)
+            created += len(processed)
+        else:
+            errors += 1
+
+    batch_pdf_cache.delete(token)
+
+    return _render(
+        request,
+        "import_pdf.html",
+        {"step": "done_batch", "created": created, "duplicates": duplicates, "errors": errors},
     )

@@ -98,6 +98,32 @@ class ImportService:
             await ensure_prices_cached(affected_tickers, db)
         return processed
 
+    async def check_is_duplicate(
+        self,
+        trade: ParsedTrade,
+        ticker: str,
+        db: AsyncSession,
+    ) -> bool | None:
+        """Check whether *trade* would be a duplicate without inserting anything.
+
+        Returns ``True`` (duplicate), ``False`` (new), or ``None`` (unknown
+        ticker).  Uses the same exact-UUID / fuzzy-same-day logic as
+        :meth:`import_trade`.
+        """
+        stock = await self._get_stock(db, ticker)
+        if stock is None:
+            return None
+
+        if trade.order_ref:
+            external_uuid = build_comdirect_external_uuid(trade.order_ref)
+            existing = await db.execute(
+                select(Transaction.id).where(
+                    Transaction.external_uuid == external_uuid
+                )
+            )
+            return existing.scalar_one_or_none() is not None
+        return await self._find_duplicate_trade(db, stock.id, trade)
+
     async def import_trade(
         self,
         trade: ParsedTrade,
