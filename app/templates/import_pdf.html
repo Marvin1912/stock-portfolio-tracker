@@ -344,11 +344,16 @@
 
     function updateLabel(files) {
       if (!files || !files.length) {
-        label.textContent = "";
+        label.innerHTML = "";
       } else if (files.length === 1) {
-        label.textContent = files[0].name;
+        label.innerHTML = files[0].name;
       } else {
-        label.textContent = files.length + " files selected";
+        var html = "<ul style=\"list-style:none;padding:0;margin:0;\">";
+        for (var i = 0; i < files.length; i++) {
+          html += "<li>" + files[i].name + "</li>";
+        }
+        html += "</ul>";
+        label.innerHTML = html;
       }
     }
 
