@@ -49,6 +49,5 @@ async def portfolio_overview(
             "holdings_count": len(summary.holdings),
             "last_refresh": last_refresh,
             "chart_years": chart_years,
-            "current_year": current_year,
         },
     )

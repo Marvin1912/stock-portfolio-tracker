@@ -330,8 +330,9 @@
     <div class="chart-header">
       <h2>Performance</h2>
       <select id="perf-year-picker" class="year-picker">
+        <option value="" selected>All</option>
         {% for y in chart_years %}
-        <option value="{{ y }}"{% if y == current_year %} selected{% endif %}>{{ y }}</option>
+        <option value="{{ y }}">{{ y }}</option>
         {% endfor %}
       </select>
     </div>
@@ -343,8 +344,9 @@
       <div class="chart-header">
         <h2>Gain / Loss</h2>
         <select id="gain-loss-year-picker" class="year-picker">
+          <option value="" selected>All</option>
           {% for y in chart_years %}
-          <option value="{{ y }}"{% if y == current_year %} selected{% endif %}>{{ y }}</option>
+          <option value="{{ y }}">{{ y }}</option>
           {% endfor %}
         </select>
       </div>
@@ -464,7 +466,8 @@
 
   let perfChartInitialized = false;
   async function loadPerformanceChart(year) {
-    const resp = await fetch(`/api/v1/holdings/chart/performance?year=${year}`);
+    const url = year ? `/api/v1/holdings/chart/performance?year=${year}` : '/api/v1/holdings/chart/performance';
+    const resp = await fetch(url);
     const fig = await resp.json();
     if (fig && fig.data) {
       const layout = Object.assign({}, fig.layout, DARK_LAYOUT, {
@@ -486,7 +489,8 @@
 
   let gainLossChartInitialized = false;
   async function loadGainLossChart(year) {
-    const resp = await fetch(`/api/v1/holdings/chart/gain-loss?year=${year}`);
+    const url = year ? `/api/v1/holdings/chart/gain-loss?year=${year}` : '/api/v1/holdings/chart/gain-loss';
+    const resp = await fetch(url);
     const fig = await resp.json();
     if (fig && fig.data) {
       const layout = Object.assign({}, fig.layout, DARK_LAYOUT, {
@@ -509,9 +513,8 @@
     }
   }
 
-  const _currentYear = {{ current_year }};
-  loadPerformanceChart(_currentYear);
-  loadGainLossChart(_currentYear);
+  loadPerformanceChart('');
+  loadGainLossChart('');
 
   document.getElementById('perf-year-picker').addEventListener('change', e => loadPerformanceChart(e.target.value));
   document.getElementById('gain-loss-year-picker').addEventListener('change', e => loadGainLossChart(e.target.value));
