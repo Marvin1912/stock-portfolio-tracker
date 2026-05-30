@@ -6,9 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import app.services.openfigi_lookup as _openfigi_module
 from app.services.openfigi_lookup import resolve_wkn
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _clear_openfigi_cache():
+    _openfigi_module._cache.clear()
+    yield
+    _openfigi_module._cache.clear()
 
 
 def _mock_response(json_data: object, status_code: int = 200) -> MagicMock:
