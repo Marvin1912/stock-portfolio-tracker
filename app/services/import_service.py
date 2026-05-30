@@ -14,7 +14,7 @@ from app.models.stock import Stock
 from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
 from app.services import chart_cache
 from app.services.comdirect_parser import ParsedTrade
-from app.services.comdirect_ref import build_comdirect_external_uuid
+from app.services.comdirect_ref import build_pdf_external_uuid
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
 from app.services.price_service import ensure_prices_cached
@@ -119,7 +119,7 @@ class ImportService:
             return None
 
         if trade.order_ref:
-            external_uuid = build_comdirect_external_uuid(trade.order_ref)
+            external_uuid = build_pdf_external_uuid(trade.broker, trade.order_ref)
             existing = await db.execute(
                 select(Transaction.id).where(
                     Transaction.external_uuid == external_uuid
@@ -163,7 +163,7 @@ class ImportService:
             return "unknown_ticker"
 
         if trade.order_ref:
-            external_uuid = build_comdirect_external_uuid(trade.order_ref)
+            external_uuid = build_pdf_external_uuid(trade.broker, trade.order_ref)
             existing = await db.execute(
                 select(Transaction.id).where(
                     Transaction.external_uuid == external_uuid
@@ -175,8 +175,8 @@ class ImportService:
             # No stable order reference — fall back to the fuzzy same-day probe.
             if await self._find_duplicate_trade(db, stock.id, trade):
                 return "duplicate"
-            external_uuid = build_comdirect_external_uuid(
-                f"{trade.isin or trade.wkn}:{trade.date.date()}"
+            external_uuid = build_pdf_external_uuid(
+                trade.broker, f"{trade.isin or trade.wkn}:{trade.date.date()}"
             )
 
         db.add(
