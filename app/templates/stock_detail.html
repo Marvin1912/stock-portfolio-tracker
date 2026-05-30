@@ -85,6 +85,67 @@
     margin-bottom: 1rem;
   }
 
+  /* ── Transactions list ───────────────────────────────────────── */
+  .tx-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .tx-row {
+    display: grid;
+    grid-template-columns: 6.5rem 7.5rem 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 0.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tx-row:last-child { border-bottom: none; }
+  .tx-date {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .tx-type {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    justify-self: start;
+    white-space: nowrap;
+  }
+  .tx-type.buy        { color: #6FB07F; border-color: rgba(111, 176, 127, 0.4); }
+  .tx-type.sell       { color: #C77B6B; border-color: rgba(199, 123, 107, 0.4); }
+  .tx-type.dividend   { color: var(--accent); border-color: rgba(212, 146, 74, 0.4); }
+  .tx-meta {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tx-amount {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .tx-amount small { font-size: 0.7em; color: var(--muted); font-weight: 400; }
+
+  @media (max-width: 600px) {
+    .tx-row { grid-template-columns: 1fr auto; row-gap: 0.4rem; }
+    .tx-meta { grid-column: 1 / -1; }
+  }
+
   /* ── No-data state ───────────────────────────────────────────── */
   .no-data-state {
     display: flex;
@@ -148,6 +209,33 @@
   <div class="chart-card anim-fade-in" style="animation-delay: 200ms">
     <div class="chart-card-title">Price History &middot; 1Y</div>
     <div id="price-history-chart" style="height: 300px;"></div>
+  </div>
+
+  <div class="chart-card anim-fade-in" style="animation-delay: 280ms">
+    <div class="chart-card-title">Transactions</div>
+    {% if transactions %}
+      <ul class="tx-list">
+        {% for tx in transactions %}
+          <li class="tx-row">
+            <span class="tx-date">{{ tx.date.strftime("%Y-%m-%d") }}</span>
+            <span class="tx-type {{ tx.type|lower }}">{{ tx.type }}</span>
+            <span class="tx-meta">
+              {% if tx.shares %}{{ "%g"|format(tx.shares) }} sh{% endif %}
+              {%- if tx.fee %} &middot; fee {{ "%.2f"|format(tx.fee) }}{% endif %}
+              {%- if tx.tax %} &middot; tax {{ "%.2f"|format(tx.tax) }}{% endif %}
+              {%- if tx.note %} &middot; {{ tx.note }}{% endif %}
+            </span>
+            <span class="tx-amount">
+              {{ "%.2f"|format(tx.amount) }} <small>{{ tx.currency }}</small>
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="no-data-state">
+        <span class="no-data-text">// no transactions recorded for this instrument</span>
+      </div>
+    {% endif %}
   </div>
 
 {% endblock %}

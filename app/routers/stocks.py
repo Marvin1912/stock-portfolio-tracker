@@ -19,6 +19,7 @@ from app.database import get_async_session
 from app.models.holding import Holding
 from app.models.price_cache import PriceCache
 from app.models.stock import Stock
+from app.models.transaction import Transaction
 from app.services.fx_service import to_eur
 from app.services.price_service import get_latest_close
 
@@ -28,6 +29,18 @@ _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 _DB = Depends(get_async_session)
+
+
+@dataclass
+class TransactionRow:
+    date: datetime.datetime
+    type: str
+    shares: Decimal
+    amount: Decimal
+    currency: str
+    fee: Decimal
+    tax: Decimal
+    note: str | None
 
 
 @dataclass
@@ -81,10 +94,29 @@ async def stock_detail(
         current_value=current_value,
     )
 
+    tx_result = await db.execute(
+        select(Transaction)
+        .where(Transaction.stock_id == stock.id)
+        .order_by(Transaction.date.desc())
+    )
+    transactions = [
+        TransactionRow(
+            date=tx.date,
+            type=tx.type,
+            shares=tx.shares,
+            amount=tx.amount,
+            currency=tx.currency,
+            fee=tx.fee,
+            tax=tx.tax,
+            note=tx.note,
+        )
+        for tx in tx_result.scalars().all()
+    ]
+
     return templates.TemplateResponse(
         request=request,
         name="stock_detail.html",
-        context={"stock": detail},
+        context={"stock": detail, "transactions": transactions},
     )
 
 
