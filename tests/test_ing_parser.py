@@ -134,8 +134,11 @@ def test_extract_trade_skips_fallback_for_non_ing(monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ImportService.import_trade – ING dedupe key namespacing
+# ImportService.import_trade – ING natural-key cross-source dedupe
 # ---------------------------------------------------------------------------
+
+# total = Kurswert 967.64 + Provision 7.32 = 974.96 → 97496 cents.
+NAT_KEY = "nat:IE00B4L5Y983:2026-03-23:97496:BUY"
 
 
 def _ing_trade():
@@ -143,7 +146,10 @@ def _ing_trade():
 
 
 @pytest.mark.asyncio
-async def test_import_trade_writes_ing_namespaced_key() -> None:
+async def test_import_trade_writes_natural_key() -> None:
+    """ING trades are keyed by the natural id (ISIN+date+total+type) so they
+    bridge against the matching PP/XML Sparplan transaction, which carries no
+    order number."""
     db = _make_db({"IWDA.AS": 7})
 
     status = await ImportService().import_trade(_ing_trade(), "IWDA.AS", db)
@@ -155,13 +161,32 @@ async def test_import_trade_writes_ing_namespaced_key() -> None:
         if c.args[0].__class__.__name__ == "Transaction"
     ]
     assert len(added) == 1
-    assert added[0].external_uuid == "pdf:ing:456480204.001"
+    assert added[0].external_uuid == NAT_KEY
     assert added[0].amount == Decimal("967.64")
     assert added[0].fee == Decimal("7.32")
 
 
 @pytest.mark.asyncio
-async def test_import_trade_skips_duplicate_by_exact_key() -> None:
+async def test_import_trade_skips_duplicate_by_natural_key() -> None:
+    """A trade already present under the natural key (e.g. imported earlier from
+    a PP/XML Sparplan export) is detected as a duplicate."""
+    db = _make_db({"IWDA.AS": 7}, existing_external_uuids={NAT_KEY})
+
+    status = await ImportService().import_trade(_ing_trade(), "IWDA.AS", db)
+
+    assert status == "duplicate"
+    added = [
+        c.args[0]
+        for c in db.add.call_args_list
+        if c.args[0].__class__.__name__ == "Transaction"
+    ]
+    assert added == []
+
+
+@pytest.mark.asyncio
+async def test_import_trade_skips_duplicate_by_legacy_pdf_key() -> None:
+    """Re-importing an ING PDF stored under the first-release pdf:ing:{ref} key
+    still dedupes via the back-compat order-ref probe."""
     db = _make_db(
         {"IWDA.AS": 7},
         existing_external_uuids={"pdf:ing:456480204.001"},

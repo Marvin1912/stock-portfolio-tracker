@@ -14,7 +14,7 @@ from app.models.stock import Stock
 from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
 from app.services import chart_cache
 from app.services.comdirect_parser import ParsedTrade
-from app.services.comdirect_ref import build_pdf_external_uuid
+from app.services.comdirect_ref import build_natural_trade_uuid, build_pdf_external_uuid
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
 from app.services.price_service import ensure_prices_cached
@@ -117,16 +117,8 @@ class ImportService:
         stock = await self._get_stock(db, ticker)
         if stock is None:
             return None
-
-        if trade.order_ref:
-            external_uuid = build_pdf_external_uuid(trade.broker, trade.order_ref)
-            existing = await db.execute(
-                select(Transaction.id).where(
-                    Transaction.external_uuid == external_uuid
-                )
-            )
-            return existing.scalar_one_or_none() is not None
-        return await self._find_duplicate_trade(db, stock.id, trade)
+        _, is_duplicate = await self._resolve_trade_dedup(db, stock, trade)
+        return is_duplicate
 
     async def import_trade(
         self,
@@ -145,14 +137,10 @@ class ImportService:
 
         Duplicate protection runs across *all* sources, not just prior PDF
         imports: the same purchase may already be in the database from a
-        Portfolio Performance XML import. When the trade carries a comdirect
-        ``order_ref`` we build the shared ``pdf:comdirect:{ref}`` key (the same
-        one the XML importer derives from the note's *Ordernummer*) and look it
-        up exactly — so an XML-first then PDF-second import dedupes
-        deterministically without tripping the unique constraint, and two
-        genuinely distinct same-day trades keep distinct keys. Only when no
-        order ref is available do we fall back to the fuzzy same-day probe in
-        :meth:`_find_duplicate_trade`.
+        Portfolio Performance XML import. The cross-source key depends on the
+        broker — see :meth:`_resolve_trade_dedup` — and the
+        ``uq_transaction_external_uuid`` constraint dedupes deterministically
+        regardless of which file is imported first.
 
         Returns ``"created"`` when a new transaction was inserted,
         ``"duplicate"`` when a matching one already exists, or
@@ -162,22 +150,9 @@ class ImportService:
         if stock is None:
             return "unknown_ticker"
 
-        if trade.order_ref:
-            external_uuid = build_pdf_external_uuid(trade.broker, trade.order_ref)
-            existing = await db.execute(
-                select(Transaction.id).where(
-                    Transaction.external_uuid == external_uuid
-                )
-            )
-            if existing.scalar_one_or_none() is not None:
-                return "duplicate"
-        else:
-            # No stable order reference — fall back to the fuzzy same-day probe.
-            if await self._find_duplicate_trade(db, stock.id, trade):
-                return "duplicate"
-            external_uuid = build_pdf_external_uuid(
-                trade.broker, f"{trade.isin or trade.wkn}:{trade.date.date()}"
-            )
+        external_uuid, is_duplicate = await self._resolve_trade_dedup(db, stock, trade)
+        if is_duplicate:
+            return "duplicate"
 
         db.add(
             Transaction(
@@ -201,6 +176,55 @@ class ImportService:
         # main page reflects the new quantities instead of stale cache.
         chart_cache.invalidate()
         return "created"
+
+    async def _resolve_trade_dedup(
+        self,
+        db: AsyncSession,
+        stock: Stock,
+        trade: ParsedTrade,
+    ) -> tuple[str, bool]:
+        """Return ``(external_uuid_to_store, already_exists)`` for *trade*.
+
+        The cross-source key is broker-specific:
+
+        * **ING** trades bridge on the *natural key* (ISIN + date + fee-inclusive
+          total + type). The matching Portfolio Performance transaction is
+          PP-generated from a savings plan and carries no order number, so an
+          order-number key could never link them; the natural key can. We also
+          treat a legacy ``pdf:ing:{order_ref}`` row (written before this bridge
+          existed) as a duplicate, so re-imports of already-stored ING PDFs stay
+          idempotent.
+        * **comdirect** (and any ING without an ISIN) keep the order-number key,
+          falling back to the fuzzy same-day probe when no order ref is present.
+        """
+        if trade.broker == "ing" and trade.isin:
+            external_uuid = build_natural_trade_uuid(
+                trade.isin, trade.date, trade.amount + trade.fee, trade.trade_type
+            )
+            if await self._uuid_exists(db, external_uuid):
+                return external_uuid, True
+            if trade.order_ref:
+                legacy = build_pdf_external_uuid(trade.broker, trade.order_ref)
+                if await self._uuid_exists(db, legacy):
+                    return external_uuid, True
+            return external_uuid, False
+
+        if trade.order_ref:
+            external_uuid = build_pdf_external_uuid(trade.broker, trade.order_ref)
+            return external_uuid, await self._uuid_exists(db, external_uuid)
+
+        # No stable order reference — fall back to the fuzzy same-day probe.
+        external_uuid = build_pdf_external_uuid(
+            trade.broker, f"{trade.isin or trade.wkn}:{trade.date.date()}"
+        )
+        is_duplicate = await self._find_duplicate_trade(db, stock.id, trade)
+        return external_uuid, is_duplicate
+
+    async def _uuid_exists(self, db: AsyncSession, external_uuid: str) -> bool:
+        existing = await db.execute(
+            select(Transaction.id).where(Transaction.external_uuid == external_uuid)
+        )
+        return existing.scalar_one_or_none() is not None
 
     async def _find_duplicate_trade(
         self,
