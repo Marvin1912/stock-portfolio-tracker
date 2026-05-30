@@ -1,17 +1,14 @@
-"""Tests for the shared comdirect order-reference helpers."""
+"""Tests for the shared broker order-reference helpers."""
 
 from __future__ import annotations
-
-import datetime
-from decimal import Decimal
 
 import pytest
 
 from app.services.comdirect_ref import (
     build_comdirect_external_uuid,
-    build_natural_trade_uuid,
-    is_sparplan_note,
+    build_ing_external_uuid,
     parse_comdirect_order_ref,
+    parse_ing_order_ref,
 )
 
 
@@ -56,35 +53,30 @@ def test_roundtrip_note_to_key() -> None:
 @pytest.mark.parametrize(
     ("note", "expected"),
     [
-        ("Generiert von Sparplan 'iShares EM' am 16.02.2025, 11:12", True),
-        ("Generiert von Sparplan 'Core World'", True),
-        # comdirect / unrelated / empty notes are not savings-plan notes.
-        ("Ord.-Nr.: 072324316214-001 | R.-Nr.: 9988776655", False),
-        ("Purchase via Sparplan", False),
-        ("", False),
-        (None, False),
+        # ING PDF text / PP XML note — both use the same format.
+        ("Ordernummer 456480204.001", "456480204.001"),
+        ("Ordernummer 463890395.001", "463890395.001"),
+        # Leading/trailing whitespace is tolerated.
+        ("  Ordernummer 123456789.001  ", "123456789.001"),
+        # Not an ING note.
+        (None, None),
+        ("", None),
+        ("Dividend Payment", None),
+        # Comdirect PP note must not match.
+        ("Ord.-Nr.: 072324316214-001 | R.-Nr.: 9988776655", None),
     ],
 )
-def test_is_sparplan_note(note: str | None, expected: bool) -> None:
-    assert is_sparplan_note(note) is expected
+def test_parse_ing_order_ref(note: str | None, expected: str | None) -> None:
+    assert parse_ing_order_ref(note) == expected
 
 
-def test_build_natural_trade_uuid() -> None:
-    key = build_natural_trade_uuid(
-        "IE00B4L5Y983",
-        datetime.datetime(2025, 1, 2, tzinfo=datetime.UTC),
-        Decimal("25.00"),
-        "BUY",
-    )
-    assert key == "nat:IE00B4L5Y983:2025-01-02:2500:BUY"
+def test_build_ing_external_uuid() -> None:
+    assert build_ing_external_uuid("456480204.001") == "pdf:ing:456480204.001"
 
 
-def test_build_natural_trade_uuid_rounds_to_cents() -> None:
-    # 967.64 + 7.32 = 974.96 → 97496 cents; lowercase isin/type are normalised.
-    key = build_natural_trade_uuid(
-        "ie00b4l5y983",
-        datetime.datetime(2026, 3, 23),
-        Decimal("974.96"),
-        "buy",
-    )
-    assert key == "nat:IE00B4L5Y983:2026-03-23:97496:BUY"
+def test_ing_roundtrip_note_to_key() -> None:
+    """An ING XML note maps to the same key the PDF importer builds."""
+    note = "Ordernummer 463890395.001"
+    ref = parse_ing_order_ref(note)
+    assert ref is not None
+    assert build_ing_external_uuid(ref) == "pdf:ing:463890395.001"

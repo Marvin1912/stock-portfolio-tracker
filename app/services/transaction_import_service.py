@@ -12,9 +12,9 @@ from app.models.stock import ASSET_TYPE_STOCK, Stock
 from app.models.transaction import TX_SOURCE_XML, Transaction
 from app.services.comdirect_ref import (
     build_comdirect_external_uuid,
-    build_natural_trade_uuid,
-    is_sparplan_note,
+    build_ing_external_uuid,
     parse_comdirect_order_ref,
+    parse_ing_order_ref,
 )
 from app.services.portfolio_performance_importer import (
     ParsedTransaction,
@@ -123,25 +123,15 @@ class TransactionImportService:
             return False
 
         # Prefer a cross-source key over PP's random per-export uuid, so an XML
-        # row dedupes against a prior PDF import of the same trade:
-        #  * comdirect notes carry the Ordernummer → shared order-number key;
-        #  * PP savings-plan ("Sparplan") trades are PP-generated and carry no
-        #    order number, but the matching ING PDF does — they instead bridge on
-        #    the natural key (ISIN + date + fee-inclusive total + type), the same
-        #    one app.services.import_service derives from the ING PDF.
-        # Everything else keeps its PP uuid, which is stable across XML re-imports.
-        ref = parse_comdirect_order_ref(tx.note)
-        if ref:
-            external_uuid = build_comdirect_external_uuid(ref)
-        elif (
-            is_sparplan_note(tx.note)
-            and mapped_type in {"BUY", "SELL"}
-            and tx.security is not None
-            and tx.security.isin
-        ):
-            external_uuid = build_natural_trade_uuid(
-                tx.security.isin, tx.date, tx.amount, mapped_type
-            )
+        # row dedupes against a prior PDF import of the same trade.  PP copies
+        # the ING/comdirect order number verbatim into the <note> element, so
+        # both PDF and XML sides can independently derive the same stable key.
+        ing_ref = parse_ing_order_ref(tx.note)
+        cmd_ref = parse_comdirect_order_ref(tx.note)
+        if ing_ref:
+            external_uuid = build_ing_external_uuid(ing_ref)
+        elif cmd_ref:
+            external_uuid = build_comdirect_external_uuid(cmd_ref)
         else:
             external_uuid = tx.uuid
 
