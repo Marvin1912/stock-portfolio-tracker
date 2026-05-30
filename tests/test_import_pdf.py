@@ -290,6 +290,31 @@ async def test_import_from_holdings_caches_prices_for_imported_tickers() -> None
 
 
 @pytest.mark.asyncio
+async def test_import_from_holdings_invalidates_chart_cache() -> None:
+    """Importing holdings must bust the cached portfolio summary so the main
+    page shows the updated quantities instead of the stale cache."""
+    from app.services.import_service import ImportService
+
+    db = _stub_pdf_db(known_tickers={"AAPL": 1})
+
+    service = ImportService()
+    with (
+        patch(
+            "app.services.import_service.ensure_prices_cached",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.import_service.chart_cache.invalidate"
+        ) as mock_invalidate,
+    ):
+        await service.import_from_holdings(
+            [("AAPL", Decimal("5"))], db, source_file="report.pdf"
+        )
+
+    mock_invalidate.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_import_from_pdf_delegates_to_import_from_holdings() -> None:
     """import_from_pdf should extract pairs and call import_from_holdings."""
     from app.services.import_service import ImportService

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import Stock
 from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
+from app.services import chart_cache
 from app.services.comdirect_parser import ParsedTrade
 from app.services.comdirect_ref import build_comdirect_external_uuid
 from app.services.holdings_service import recompute_holdings
@@ -96,6 +97,9 @@ class ImportService:
         if affected_stock_ids:
             await recompute_holdings(db, affected_stock_ids)
             await ensure_prices_cached(affected_tickers, db)
+            # Holdings changed — bust the cached portfolio summary/charts so the
+            # main page reflects the new quantities instead of stale cache.
+            chart_cache.invalidate()
         return processed
 
     async def check_is_duplicate(
@@ -193,6 +197,9 @@ class ImportService:
         await db.flush()
         await recompute_holdings(db, {stock.id})
         await ensure_prices_cached([stock.ticker], db)
+        # Holdings changed — bust the cached portfolio summary/charts so the
+        # main page reflects the new quantities instead of stale cache.
+        chart_cache.invalidate()
         return "created"
 
     async def _find_duplicate_trade(
