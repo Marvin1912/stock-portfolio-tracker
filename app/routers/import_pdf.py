@@ -17,11 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
 from app.models.transaction import TX_TYPE_BUY
-from app.services.batch_pdf_cache import BatchPdfItem
 from app.services import batch_pdf_cache
+from app.services.batch_pdf_cache import BatchPdfItem
 from app.services.comdirect_parser import ComdirectParser, ParsedTrade
 from app.services.generic_parser import GenericTableParser
 from app.services.import_service import ImportService
+from app.services.ing_parser import IngParser
 from app.services.openfigi_lookup import resolve_isin, resolve_wkn
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 _DB = Depends(get_async_session)
 _parser = GenericTableParser()
 _comdirect = ComdirectParser()
+_ing = IngParser()
 _service = ImportService()
 
 
@@ -105,9 +107,9 @@ async def _handle_single_file(request: Request, file: UploadFile) -> HTMLRespons
 
     try:
         t0 = time.perf_counter()
-        trade = _comdirect.extract_trade(tmp_path)
+        trade = _comdirect.extract_trade(tmp_path) or _ing.extract_trade(tmp_path)
         logger.info(
-            "PDF import: comdirect parse took %.2fs (%d bytes, matched=%s)",
+            "PDF import: broker trade parse took %.2fs (%d bytes, matched=%s)",
             time.perf_counter() - t0,
             len(contents),
             trade is not None,
@@ -166,7 +168,7 @@ async def _handle_batch(
         parse_error: str | None = None
 
         try:
-            trade = _comdirect.extract_trade(tmp_path)
+            trade = _comdirect.extract_trade(tmp_path) or _ing.extract_trade(tmp_path)
             if trade is None:
                 pairs = _parser.extract(tmp_path) or None
                 if pairs is None:
@@ -299,6 +301,7 @@ async def import_pdf_confirm_trade(
     wkn: Annotated[str, Form()] = "",
     isin: Annotated[str, Form()] = "",
     order_ref: Annotated[str, Form()] = "",
+    broker: Annotated[str, Form()] = "comdirect",
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     """Commit a previewed comdirect trade as a full transaction."""
@@ -329,6 +332,7 @@ async def import_pdf_confirm_trade(
         currency=currency.strip().upper() or "EUR",
         date=trade_date,
         order_ref=order_ref or None,
+        broker=broker.strip() or "comdirect",
     )
 
     status = await _service.import_trade(trade, ticker, db)

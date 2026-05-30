@@ -65,6 +65,7 @@ class ParsedTrade:
     currency: str
     date: datetime.datetime
     order_ref: str | None
+    broker: str = "comdirect"  # namespaces the dedupe key: pdf:{broker}:{ref}
 
     @property
     def display(self) -> str:

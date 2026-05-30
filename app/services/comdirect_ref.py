@@ -44,6 +44,20 @@ def parse_comdirect_order_ref(note: str | None) -> str | None:
     return m.group(1)
 
 
+def build_pdf_external_uuid(broker: str, ref: str) -> str:
+    """Return the ``external_uuid`` key for a PDF-imported *broker* trade *ref*.
+
+    The ``pdf:{broker}:{ref}`` shape namespaces dedupe keys per broker so that
+    e.g. an ING order number can never collide with a comdirect one.
+    """
+    return f"pdf:{broker}:{ref}"
+
+
 def build_comdirect_external_uuid(ref: str) -> str:
-    """Return the shared ``external_uuid`` key for a comdirect order *ref*."""
-    return f"pdf:comdirect:{ref}"
+    """Return the shared ``external_uuid`` key for a comdirect order *ref*.
+
+    Kept as the single source of truth for the comdirect key, which is shared
+    with the Portfolio Performance XML importer for cross-source dedupe; the
+    output is byte-identical to ``build_pdf_external_uuid("comdirect", ref)``.
+    """
+    return build_pdf_external_uuid("comdirect", ref)

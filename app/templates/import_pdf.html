@@ -130,6 +130,7 @@
       <input type="hidden" name="wkn" value="{{ trade.wkn | default('', true) }}">
       <input type="hidden" name="isin" value="{{ trade.isin | default('', true) }}">
       <input type="hidden" name="order_ref" value="{{ trade.order_ref | default('', true) }}">
+      <input type="hidden" name="broker" value="{{ trade.broker | default('comdirect', true) }}">
       <div class="field">
         <label for="ticker">Ticker</label>
         <input type="text" id="ticker" name="ticker" value="{{ ticker | default('', true) }}" required>
