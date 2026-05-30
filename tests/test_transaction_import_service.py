@@ -43,6 +43,7 @@ def _tx(
     note: str | None = None,
     security: SecurityInfo | None | object = _DEFAULT,
     units: list[Unit] | None = None,
+    date: datetime = datetime(2024, 1, 1),
 ) -> ParsedTransaction:
     sec: SecurityInfo | None = (
         _security() if security is _DEFAULT else security  # type: ignore[assignment]
@@ -50,7 +51,7 @@ def _tx(
     return ParsedTransaction(
         kind=kind,  # type: ignore[arg-type]
         uuid=uuid,
-        date=datetime(2024, 1, 1),
+        date=date,
         type=type,
         amount=Decimal(amount),
         currency=currency,
@@ -361,6 +362,97 @@ async def test_legacy_order_form_falls_back_to_pp_uuid() -> None:
 
     assert summary.created == 1
     assert _added_tx(db).external_uuid == "pp-uuid-y"
+
+
+# ---------------------------------------------------------------------------
+# Savings-plan (ING ↔ PP) natural-key bridge
+# ---------------------------------------------------------------------------
+
+_ING_SECURITY = SecurityInfo(
+    uuid="sec-ing",
+    name="iShsIII-Core MSCI World U.ETF",
+    isin="IE00B4L5Y983",
+    ticker="EUNL.DE",
+    currency="EUR",
+)
+_SPARPLAN_NOTE = "Generiert von Sparplan 'iShares EM' am 16.02.2025, 11:12"
+# date 2025-01-02, total 25.00 → 2500 cents.
+_ING_NAT_KEY = "nat:IE00B4L5Y983:2025-01-02:2500:BUY"
+
+
+@pytest.mark.asyncio
+async def test_sparplan_note_yields_natural_key() -> None:
+    """A PP-generated Sparplan trade (no order number) is keyed by the natural
+    id the ING PDF will compute, not PP's random uuid."""
+    db = _make_db(existing_tickers={"EUNL.DE": 5})
+    result = _result(
+        [
+            _tx(
+                uuid="pp-random-uuid",
+                type="BUY",
+                amount="25.00",
+                note=_SPARPLAN_NOTE,
+                security=_ING_SECURITY,
+                date=datetime(2025, 1, 2),
+            )
+        ]
+    )
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 1
+    assert _added_tx(db).external_uuid == _ING_NAT_KEY
+
+
+@pytest.mark.asyncio
+async def test_sparplan_skipped_when_ing_pdf_already_imported() -> None:
+    """An XML Sparplan row imported after the matching ING PDF dedupes via the
+    shared natural key."""
+    db = _make_db(
+        existing_uuids={_ING_NAT_KEY},
+        existing_tickers={"EUNL.DE": 5},
+    )
+    result = _result(
+        [
+            _tx(
+                uuid="pp-random-uuid",
+                type="BUY",
+                amount="25.00",
+                note=_SPARPLAN_NOTE,
+                security=_ING_SECURITY,
+                date=datetime(2025, 1, 2),
+            )
+        ]
+    )
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 0
+    assert summary.skipped_existing == 1
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sparplan_without_isin_falls_back_to_pp_uuid() -> None:
+    """No ISIN ⇒ no natural key can be built ⇒ keep PP's uuid."""
+    db = _make_db(existing_tickers={"EUNL.DE": 5})
+    security = SecurityInfo(uuid="sec-x", name="No ISIN ETF", isin=None, ticker="EUNL.DE")
+    result = _result(
+        [
+            _tx(
+                uuid="pp-uuid-z",
+                type="BUY",
+                note=_SPARPLAN_NOTE,
+                security=security,
+                date=datetime(2025, 1, 2),
+            )
+        ]
+    )
+
+    summary = await TransactionImportService().import_xml_result(result, db)
+
+    assert summary.created == 1
+    assert _added_tx(db).external_uuid == "pp-uuid-z"
 
 
 # ---------------------------------------------------------------------------

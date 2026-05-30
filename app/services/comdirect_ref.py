@@ -18,7 +18,9 @@ never drift apart.
 
 from __future__ import annotations
 
+import datetime
 import re
+from decimal import ROUND_HALF_UP, Decimal
 
 # Modern PP note prefix, e.g. "Ord.-Nr.: 072324316214-001 | R.-Nr.: 1234567".
 # The reference is digits and dashes and stops before the " | R.-Nr.:" segment.
@@ -61,3 +63,36 @@ def build_comdirect_external_uuid(ref: str) -> str:
     output is byte-identical to ``build_pdf_external_uuid("comdirect", ref)``.
     """
     return build_pdf_external_uuid("comdirect", ref)
+
+
+# Portfolio Performance auto-text for a savings-plan-generated trade, e.g.
+# "Generiert von Sparplan 'iShares EM' am 16.02.2025, 11:12". These carry no
+# order number (unlike comdirect notes), so the order-number bridge cannot link
+# them to the matching ING PDF — the natural key below is used instead.
+_SPARPLAN_NOTE_RE = re.compile(r"Generiert von Sparplan")
+
+
+def is_sparplan_note(note: str | None) -> bool:
+    """Return True if *note* is Portfolio Performance's savings-plan auto-text."""
+    return bool(note and _SPARPLAN_NOTE_RE.search(note))
+
+
+def build_natural_trade_uuid(
+    isin: str,
+    trade_date: datetime.datetime,
+    total: Decimal,
+    ttype: str,
+) -> str:
+    """Return a deterministic cross-source key from a trade's natural identity.
+
+    Used when no order number bridges the two sources (e.g. an ING Sparplan: the
+    PDF has an ``Ordernummer`` but the Portfolio Performance transaction, being
+    PP-generated, does not). Both importers can compute this same key from values
+    that are identical for the same real trade — ISIN, the calendar trade date,
+    the fee-inclusive total (PP's ``amount`` == the ING ``Endbetrag`` ==
+    ``Kurswert + Provision``) and the trade type — so the
+    ``uq_transaction_external_uuid`` constraint dedupes them regardless of import
+    order. ``total`` is rendered as integer cents so formatting can never differ.
+    """
+    cents = int((total * 100).to_integral_value(rounding=ROUND_HALF_UP))
+    return f"nat:{isin.upper()}:{trade_date.date().isoformat()}:{cents}:{ttype.upper()}"
