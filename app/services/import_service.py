@@ -14,7 +14,7 @@ from app.models.stock import Stock
 from app.models.transaction import TX_SOURCE_PDF, TX_TYPE_BUY, Transaction
 from app.services import chart_cache
 from app.services.comdirect_parser import ParsedTrade
-from app.services.comdirect_ref import build_natural_trade_uuid, build_pdf_external_uuid
+from app.services.comdirect_ref import build_pdf_external_uuid
 from app.services.holdings_service import recompute_holdings
 from app.services.pdf_parser import BaseBrokerParser
 from app.services.price_service import ensure_prices_cached
@@ -185,30 +185,12 @@ class ImportService:
     ) -> tuple[str, bool]:
         """Return ``(external_uuid_to_store, already_exists)`` for *trade*.
 
-        The cross-source key is broker-specific:
-
-        * **ING** trades bridge on the *natural key* (ISIN + date + fee-inclusive
-          total + type). The matching Portfolio Performance transaction is
-          PP-generated from a savings plan and carries no order number, so an
-          order-number key could never link them; the natural key can. We also
-          treat a legacy ``pdf:ing:{order_ref}`` row (written before this bridge
-          existed) as a duplicate, so re-imports of already-stored ING PDFs stay
-          idempotent.
-        * **comdirect** (and any ING without an ISIN) keep the order-number key,
-          falling back to the fuzzy same-day probe when no order ref is present.
+        The cross-source key is derived from the stable order number shared
+        between the broker PDF and the Portfolio Performance XML note.  ING and
+        comdirect both follow the same strategy: ``pdf:{broker}:{order_ref}``
+        when an order number is available, falling back to the fuzzy same-day
+        probe when it is not.
         """
-        if trade.broker == "ing" and trade.isin:
-            external_uuid = build_natural_trade_uuid(
-                trade.isin, trade.date, trade.amount + trade.fee, trade.trade_type
-            )
-            if await self._uuid_exists(db, external_uuid):
-                return external_uuid, True
-            if trade.order_ref:
-                legacy = build_pdf_external_uuid(trade.broker, trade.order_ref)
-                if await self._uuid_exists(db, legacy):
-                    return external_uuid, True
-            return external_uuid, False
-
         if trade.order_ref:
             external_uuid = build_pdf_external_uuid(trade.broker, trade.order_ref)
             return external_uuid, await self._uuid_exists(db, external_uuid)

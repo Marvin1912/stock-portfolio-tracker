@@ -365,8 +365,11 @@ async def test_legacy_order_form_falls_back_to_pp_uuid() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Savings-plan (ING ↔ PP) natural-key bridge
+# ING order-number bridge (ING PDF ↔ PP XML)
 # ---------------------------------------------------------------------------
+
+_ING_ORDER_NOTE = "Ordernummer 463890395.001"
+_ING_ORDER_KEY = "pdf:ing:463890395.001"
 
 _ING_SECURITY = SecurityInfo(
     uuid="sec-ing",
@@ -375,54 +378,33 @@ _ING_SECURITY = SecurityInfo(
     ticker="EUNL.DE",
     currency="EUR",
 )
-_SPARPLAN_NOTE = "Generiert von Sparplan 'iShares EM' am 16.02.2025, 11:12"
-# date 2025-01-02, total 25.00 → 2500 cents.
-_ING_NAT_KEY = "nat:IE00B4L5Y983:2025-01-02:2500:BUY"
 
 
 @pytest.mark.asyncio
-async def test_sparplan_note_yields_natural_key() -> None:
-    """A PP-generated Sparplan trade (no order number) is keyed by the natural
-    id the ING PDF will compute, not PP's random uuid."""
+async def test_ing_order_note_yields_ing_key() -> None:
+    """An ING PP note with 'Ordernummer ...' is keyed by pdf:ing:{ref},
+    not PP's random uuid."""
     db = _make_db(existing_tickers={"EUNL.DE": 5})
     result = _result(
-        [
-            _tx(
-                uuid="pp-random-uuid",
-                type="BUY",
-                amount="25.00",
-                note=_SPARPLAN_NOTE,
-                security=_ING_SECURITY,
-                date=datetime(2025, 1, 2),
-            )
-        ]
+        [_tx(uuid="pp-random-uuid", type="BUY", note=_ING_ORDER_NOTE, security=_ING_SECURITY)]
     )
 
     summary = await TransactionImportService().import_xml_result(result, db)
 
     assert summary.created == 1
-    assert _added_tx(db).external_uuid == _ING_NAT_KEY
+    assert _added_tx(db).external_uuid == _ING_ORDER_KEY
 
 
 @pytest.mark.asyncio
-async def test_sparplan_skipped_when_ing_pdf_already_imported() -> None:
-    """An XML Sparplan row imported after the matching ING PDF dedupes via the
-    shared natural key."""
+async def test_xml_skipped_when_ing_pdf_already_imported_by_order_ref() -> None:
+    """An XML row imported after the matching ING PDF dedupes via the shared
+    order-number key."""
     db = _make_db(
-        existing_uuids={_ING_NAT_KEY},
+        existing_uuids={_ING_ORDER_KEY},
         existing_tickers={"EUNL.DE": 5},
     )
     result = _result(
-        [
-            _tx(
-                uuid="pp-random-uuid",
-                type="BUY",
-                amount="25.00",
-                note=_SPARPLAN_NOTE,
-                security=_ING_SECURITY,
-                date=datetime(2025, 1, 2),
-            )
-        ]
+        [_tx(uuid="pp-random-uuid", type="BUY", note=_ING_ORDER_NOTE, security=_ING_SECURITY)]
     )
 
     summary = await TransactionImportService().import_xml_result(result, db)
@@ -430,29 +412,6 @@ async def test_sparplan_skipped_when_ing_pdf_already_imported() -> None:
     assert summary.created == 0
     assert summary.skipped_existing == 1
     db.add.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_sparplan_without_isin_falls_back_to_pp_uuid() -> None:
-    """No ISIN ⇒ no natural key can be built ⇒ keep PP's uuid."""
-    db = _make_db(existing_tickers={"EUNL.DE": 5})
-    security = SecurityInfo(uuid="sec-x", name="No ISIN ETF", isin=None, ticker="EUNL.DE")
-    result = _result(
-        [
-            _tx(
-                uuid="pp-uuid-z",
-                type="BUY",
-                note=_SPARPLAN_NOTE,
-                security=security,
-                date=datetime(2025, 1, 2),
-            )
-        ]
-    )
-
-    summary = await TransactionImportService().import_xml_result(result, db)
-
-    assert summary.created == 1
-    assert _added_tx(db).external_uuid == "pp-uuid-z"
 
 
 # ---------------------------------------------------------------------------
