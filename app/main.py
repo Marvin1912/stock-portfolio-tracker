@@ -15,6 +15,7 @@ from app.database import build_engine, build_session_factory, close_db, init_db
 from app.routers import (
     admin,
     dashboard,
+    earnings,
     health,
     holdings,
     htmx,
@@ -136,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(dashboard.router)
     app.include_router(portfolio.router)
+    app.include_router(earnings.router)
     app.include_router(stocks.router)
     app.include_router(holdings.router, prefix="/api/v1")
     app.include_router(htmx.router)

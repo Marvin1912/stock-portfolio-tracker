@@ -150,6 +150,52 @@ async def get_gain_loss_chart(
     )
 
 
+@router.get("/chart/earnings-per-year")
+async def get_earnings_per_year_chart(
+    db: AsyncSession = _DB,
+) -> Response:
+    """Return a Plotly bar chart of annual P/L earnings (year-over-year delta)."""
+    history = await PortfolioService().get_gain_loss_history(db)
+    if not history:
+        return JSONResponse(content={})
+
+    year_end: dict[int, float] = {}
+    for date, value in history:
+        year_end[date.year] = float(value)
+
+    years = sorted(year_end.keys())
+    earnings: list[float] = []
+    prev = 0.0
+    for y in years:
+        earnings.append(year_end[y] - prev)
+        prev = year_end[y]
+
+    colors = ["#5AB87E" if e >= 0 else "#C96B6B" for e in earnings]
+
+    fig = go.Figure(
+        go.Bar(
+            x=[str(y) for y in years],
+            y=earnings,
+            marker_color=colors,
+            hovertemplate="%{x}<br>Earnings: %{y:,.2f} €<extra></extra>",
+        )
+    )
+    fig.add_hline(y=0, line={"color": "#888", "width": 1, "dash": "dash"})
+    fig.update_layout(
+        margin={"t": 20, "b": 40, "l": 60, "r": 20},
+        xaxis={"type": "category", "showgrid": False},
+        yaxis={"tickformat": ",.0f", "showgrid": True, "gridcolor": "#eee"},
+        hovermode="x unified",
+        plot_bgcolor="#fff",
+        paper_bgcolor="#fff",
+    )
+    return Response(
+        content=pio.to_json(fig),
+        media_type="application/json",
+        headers={"Cache-Control": "max-age=300, private"},
+    )
+
+
 @router.get("/chart/allocation")
 async def get_allocation_chart(
     db: AsyncSession = _DB,
