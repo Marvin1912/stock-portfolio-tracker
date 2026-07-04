@@ -17,7 +17,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 
 from app.models.transaction import TX_TYPE_DIVIDEND
@@ -38,7 +38,9 @@ _REF_RE = re.compile(r"Referenz-Nr\.\s*:\s*([A-Z0-9]+)")
 # "Depotbestand : 10" or "Depotbestand 10" → shares held on dividend date.
 _SHARES_RE = re.compile(rf"Depotbestand\s*:?\s*(?P<shares>{_DE_NUMBER})")
 # "Verrechnung über Konto ... EUR 123,45" → net amount (EUR).
-_AMOUNT_RE = re.compile(rf"Verrechnung\s+(?:ü|ue)ber\s+Konto[^\n]*?(?P<amount>{_DE_NUMBER})\s*$", re.MULTILINE)
+_AMOUNT_RE = re.compile(
+    rf"Verrechnung\s+(?:ü|ue)ber\s+Konto[^\n]*?(?P<amount>{_DE_NUMBER})\s*$", re.MULTILINE
+)
 # "Quellensteuer USD 0,15 ..." or "Quellensteuer EUR 10,00" → withheld tax (currency and amount).
 _TAX_RE = re.compile(rf"Quellensteuer\s+(?P<ccy>[A-Z]{{3}})\s+(?P<tax>{_DE_NUMBER})", re.MULTILINE)
 # "Devisenkurs ... 1,0950" → FX rate (when tax is in non-EUR currency).

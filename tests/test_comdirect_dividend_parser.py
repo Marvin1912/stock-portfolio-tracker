@@ -265,13 +265,16 @@ async def test_import_trade_dividend_creates_transaction() -> None:
     stock.ticker = "SYK"
     stock.currency = "EUR"
 
-    with patch.object(ImportService, "_get_stock", new_callable=AsyncMock) as mock_get:
-        with patch.object(ImportService, "_uuid_exists", new_callable=AsyncMock) as mock_exists:
-            mock_get.return_value = stock
-            mock_exists.return_value = False
+    with patch.object(
+        ImportService, "_get_stock", new_callable=AsyncMock
+    ) as mock_get, patch.object(
+        ImportService, "_uuid_exists", new_callable=AsyncMock
+    ) as mock_exists:
+        mock_get.return_value = stock
+        mock_exists.return_value = False
 
-            service = ImportService()
-            status = await service.import_trade(trade, "SYK", db)
+        service = ImportService()
+        status = await service.import_trade(trade, "SYK", db)
 
     assert status == "created"
     # Verify that the transaction was added with the correct note.
@@ -303,13 +306,16 @@ async def test_import_trade_dividend_dedupes_on_replay() -> None:
     stock.ticker = "SYK"
     stock.currency = "EUR"
 
-    with patch.object(ImportService, "_get_stock", new_callable=AsyncMock) as mock_get:
-        with patch.object(ImportService, "_uuid_exists", new_callable=AsyncMock) as mock_exists:
-            mock_get.return_value = stock
-            mock_exists.return_value = True
+    with patch.object(
+        ImportService, "_get_stock", new_callable=AsyncMock
+    ) as mock_get, patch.object(
+        ImportService, "_uuid_exists", new_callable=AsyncMock
+    ) as mock_exists:
+        mock_get.return_value = stock
+        mock_exists.return_value = True
 
-            service = ImportService()
-            status = await service.import_trade(trade, "SYK", db)
+        service = ImportService()
+        status = await service.import_trade(trade, "SYK", db)
 
     assert status == "duplicate"
     db.add.assert_not_called()
