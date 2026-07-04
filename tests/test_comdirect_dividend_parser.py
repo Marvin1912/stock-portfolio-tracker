@@ -26,6 +26,59 @@ def _stub_price_warmup():
         yield
 
 
+# Real comdirect Dividendengutschrift layout (pdfplumber/"robust" extraction):
+# the security identifier trails the name instead of leading it, "Depotbestand"
+# is a bare column header, and "Verrechnung ueber Konto" / "Valuta" are table
+# headers whose values live in the *next* line rather than the same line.
+REAL_LAYOUT_USD_DIVIDEND_TEXT = """\
+DD762/11/09
+12345 Musterstadt
+Depotnr.:
+BLZ:
+10289 010
+Herrn
+Max Mustermann
+30.01.2026
+Gutschrift faelliger Wertpapier-Ertraege
+Dividendengutschrift
+Depotbestand Wertpapier-Bezeichnung WKN/ISIN
+per 30.12.2025 Stryker Corp. 864952
+STK 10,000 Registered Shares DL -,10 US8636671013
+Emissionsland: VEREINIGTE STAATEN
+USD 0,88 Dividende pro Stueck fuer Geschaeftsjahr 01.01.25 bis 31.12.25
+zahlbar ab 30.01.2026 Quartalsdividende
+Abrechnung Dividendengutschrift
+Bruttobetrag: USD 8,80
+15,000 % Quellensteuer USD 1,32 -
+Ausmachender Betrag USD 7,48
+zum Devisenkurs: EUR/USD 1,198000 EUR 6,24
+Verrechnung ueber Konto (IBAN) Valuta Zu Ihren Gunsten vor Steuern
+DE17 0897 00 EUR 03.02.2026 EUR 6,24
+Information zur steuerlichen Behandlung dieses Geschaeftsvorganges und den auf
+Ihrem Konto gebuchten Endbetrag finden Sie auf der separaten Steuermitteilung
+(Referenz-Nr. 1AINA2WQGJM0064Z).
+Ihre comdirect
+*Diese Abrechnung wird von der Bank nicht unterschrieben
+"""
+
+
+def test_parse_text_real_layout_extracts_all_fields() -> None:
+    """Regression test for the actual comdirect Dividendengutschrift layout,
+    where 'Verrechnung ueber Konto' / 'Valuta' are table headers and the
+    amount/date live on the following data row instead of the same line."""
+    trade = ComdirectDividendParser().parse_text(REAL_LAYOUT_USD_DIVIDEND_TEXT)
+    assert trade is not None
+    assert trade.trade_type == TX_TYPE_DIVIDEND
+    assert trade.wkn == "864952"
+    assert trade.isin == "US8636671013"
+    assert trade.shares == Decimal("10.000")
+    assert trade.amount == Decimal("6.24")
+    assert trade.currency == "EUR"
+    assert trade.date == datetime.datetime(2026, 2, 3, tzinfo=datetime.UTC)
+    assert trade.order_ref == "1AINA2WQGJM0064Z"
+    assert trade.tax == Decimal("1.32") * Decimal("1.198000")
+
+
 FIXTURE_PDF_USD = Path(__file__).parent / "fixtures" / "sample_comdirect_dividend_usd.pdf"
 FIXTURE_PDF_EUR = Path(__file__).parent / "fixtures" / "sample_comdirect_dividend_eur.pdf"
 
