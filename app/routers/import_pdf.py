@@ -19,6 +19,7 @@ from app.database import get_async_session
 from app.models.transaction import TX_TYPE_BUY
 from app.services import batch_pdf_cache
 from app.services.batch_pdf_cache import BatchPdfItem
+from app.services.comdirect_dividend_parser import ComdirectDividendParser
 from app.services.comdirect_parser import ComdirectParser, ParsedTrade
 from app.services.generic_parser import GenericTableParser
 from app.services.import_service import ImportService
@@ -36,6 +37,7 @@ _DB = Depends(get_async_session)
 _parser = GenericTableParser()
 _comdirect = ComdirectParser()
 _ing = IngParser()
+_comdirect_dividend = ComdirectDividendParser()
 _service = ImportService()
 
 
@@ -107,7 +109,11 @@ async def _handle_single_file(request: Request, file: UploadFile) -> HTMLRespons
 
     try:
         t0 = time.perf_counter()
-        trade = _comdirect.extract_trade(tmp_path) or _ing.extract_trade(tmp_path)
+        trade = (
+            _comdirect.extract_trade(tmp_path)
+            or _ing.extract_trade(tmp_path)
+            or _comdirect_dividend.extract_trade(tmp_path)
+        )
         logger.info(
             "PDF import: broker trade parse took %.2fs (%d bytes, matched=%s)",
             time.perf_counter() - t0,
@@ -168,7 +174,11 @@ async def _handle_batch(
         parse_error: str | None = None
 
         try:
-            trade = _comdirect.extract_trade(tmp_path) or _ing.extract_trade(tmp_path)
+            trade = (
+                _comdirect.extract_trade(tmp_path)
+                or _ing.extract_trade(tmp_path)
+                or _comdirect_dividend.extract_trade(tmp_path)
+            )
             if trade is None:
                 pairs = _parser.extract(tmp_path) or None
                 if pairs is None:
@@ -302,6 +312,7 @@ async def import_pdf_confirm_trade(
     isin: Annotated[str, Form()] = "",
     order_ref: Annotated[str, Form()] = "",
     broker: Annotated[str, Form()] = "comdirect",
+    note: Annotated[str, Form()] = "",
     db: AsyncSession = _DB,
 ) -> HTMLResponse:
     """Commit a previewed comdirect trade as a full transaction."""
@@ -333,6 +344,7 @@ async def import_pdf_confirm_trade(
         date=trade_date,
         order_ref=order_ref or None,
         broker=broker.strip() or "comdirect",
+        note=note or None,
     )
 
     status = await _service.import_trade(trade, ticker, db)

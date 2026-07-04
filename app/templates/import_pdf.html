@@ -111,8 +111,10 @@
         <tr><th>WKN / ISIN</th><td>{{ trade.wkn }} / {{ trade.isin }}</td></tr>
         <tr><th>Type</th><td>{{ trade.trade_type }}</td></tr>
         <tr><th>Shares</th><td class="number">{{ trade.shares }}</td></tr>
+        {% if trade.price is not none %}
         <tr><th>Price</th><td class="number">{{ trade.currency }} {{ trade.price }}</td></tr>
-        <tr><th>Amount (gross)</th><td class="number">{{ trade.currency }} {{ trade.amount }}</td></tr>
+        {% endif %}
+        <tr><th>{% if trade.price is not none %}Amount (gross){% else %}Amount{% endif %}</th><td class="number">{{ trade.currency }} {{ trade.amount }}</td></tr>
         <tr><th>Fees</th><td class="number">{{ trade.currency }} {{ trade.fee }}</td></tr>
         <tr><th>Tax</th><td class="number">{{ trade.currency }} {{ trade.tax }}</td></tr>
         <tr><th>Trade date</th><td>{{ trade.date.date() }}</td></tr>
@@ -131,6 +133,7 @@
       <input type="hidden" name="isin" value="{{ trade.isin | default('', true) }}">
       <input type="hidden" name="order_ref" value="{{ trade.order_ref | default('', true) }}">
       <input type="hidden" name="broker" value="{{ trade.broker | default('comdirect', true) }}">
+      <input type="hidden" name="note" value="{{ trade.note | default('', true) }}">
       <div class="field">
         <label for="ticker">Ticker</label>
         <input type="text" id="ticker" name="ticker" value="{{ ticker | default('', true) }}" required>

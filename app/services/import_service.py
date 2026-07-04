@@ -165,7 +165,7 @@ class ImportService:
                 currency=trade.currency or stock.currency,
                 fee=trade.fee,
                 tax=trade.tax,
-                note=f"Imported from {source_file}",
+                note=trade.note or f"Imported from {source_file}",
                 source=TX_SOURCE_PDF,
             )
         )
