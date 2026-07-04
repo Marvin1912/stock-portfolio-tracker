@@ -104,6 +104,12 @@
       Could not resolve a ticker from WKN {{ trade.wkn }} / ISIN {{ trade.isin }}.
       Enter the tracked ticker manually to import this trade.
     </div>
+    {% elif is_duplicate == true %}
+    <div class="warning">
+      This looks like a duplicate — a matching {{ trade.trade_type }} transaction
+      for {{ ticker }} on {{ trade.date.date() }} may already be in your
+      portfolio. Confirming will skip it rather than import it twice.
+    </div>
     {% endif %}
     <table class="table-striped">
       <tbody>

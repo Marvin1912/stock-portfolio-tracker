@@ -93,13 +93,15 @@ async def import_pdf_preview(
 
     # Single-file path — existing flow, untouched.
     if len(files) == 1:
-        return await _handle_single_file(request, files[0])
+        return await _handle_single_file(request, files[0], db)
 
     # Multi-file batch path.
     return await _handle_batch(request, files, db)
 
 
-async def _handle_single_file(request: Request, file: UploadFile) -> HTMLResponse:
+async def _handle_single_file(
+    request: Request, file: UploadFile, db: AsyncSession
+) -> HTMLResponse:
     """Original single-file flow: comdirect trade or generic holdings preview."""
     contents = await file.read()
 
@@ -121,7 +123,7 @@ async def _handle_single_file(request: Request, file: UploadFile) -> HTMLRespons
             trade is not None,
         )
         if trade is not None:
-            return await _preview_comdirect(request, trade)
+            return await _preview_comdirect(request, trade, db)
         t0 = time.perf_counter()
         pairs = _parser.extract(tmp_path)
         logger.info(
@@ -225,7 +227,9 @@ async def _handle_batch(
     )
 
 
-async def _preview_comdirect(request: Request, trade: ParsedTrade) -> HTMLResponse:
+async def _preview_comdirect(
+    request: Request, trade: ParsedTrade, db: AsyncSession
+) -> HTMLResponse:
     """Resolve the WKN/ISIN to a ticker and render the rich trade preview."""
     key = getattr(getattr(request.app.state, "settings", None), "openfigi_api_key", "")
     ticker: str | None = None
@@ -253,10 +257,19 @@ async def _preview_comdirect(request: Request, trade: ParsedTrade) -> HTMLRespon
         "set" if key else "unset",
     )
 
+    is_duplicate: bool | None = None
+    if ticker is not None:
+        is_duplicate = await _service.check_is_duplicate(trade, ticker, db)
+
     return _render(
         request,
         "import_pdf.html",
-        {"step": "preview_trade", "trade": trade, "ticker": ticker},
+        {
+            "step": "preview_trade",
+            "trade": trade,
+            "ticker": ticker,
+            "is_duplicate": is_duplicate,
+        },
     )
 
 
