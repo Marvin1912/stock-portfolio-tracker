@@ -66,6 +66,7 @@ class ParsedTrade:
     date: datetime.datetime
     order_ref: str | None
     broker: str = "comdirect"  # namespaces the dedupe key: pdf:{broker}:{ref}
+    note: str | None = None  # dividend descriptor or other trade-specific note
 
     @property
     def display(self) -> str:
