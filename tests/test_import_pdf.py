@@ -76,6 +76,52 @@ async def test_import_pdf_post_valid_pdf_shows_all_tickers(client: AsyncClient) 
 
 
 # ---------------------------------------------------------------------------
+# POST /import/pdf  — single comdirect trade preview (duplicate check)
+# ---------------------------------------------------------------------------
+
+FIXTURE_PDF_COMDIRECT_KAUF = Path(__file__).parent / "fixtures" / "sample_comdirect_kauf.pdf"
+
+
+@pytest.mark.asyncio
+async def test_import_pdf_post_single_trade_flags_duplicate(client: AsyncClient) -> None:
+    """The single-file preview must warn upfront when the trade already exists,
+    mirroring the batch-upload preview's duplicate check."""
+    pdf_bytes = FIXTURE_PDF_COMDIRECT_KAUF.read_bytes()
+
+    with patch(
+        "app.routers.import_pdf.resolve_wkn", new=AsyncMock(return_value="SAP")
+    ), patch(
+        "app.routers.import_pdf._service.check_is_duplicate", new=AsyncMock(return_value=True)
+    ):
+        response = await client.post(
+            "/import/pdf",
+            files=[("files", ("kauf.pdf", pdf_bytes, "application/pdf"))],
+        )
+
+    assert response.status_code == 200
+    assert "duplicate" in response.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_import_pdf_post_single_trade_no_warning_when_new(client: AsyncClient) -> None:
+    """A non-duplicate trade must not show the duplicate warning."""
+    pdf_bytes = FIXTURE_PDF_COMDIRECT_KAUF.read_bytes()
+
+    with patch(
+        "app.routers.import_pdf.resolve_wkn", new=AsyncMock(return_value="SAP")
+    ), patch(
+        "app.routers.import_pdf._service.check_is_duplicate", new=AsyncMock(return_value=False)
+    ):
+        response = await client.post(
+            "/import/pdf",
+            files=[("files", ("kauf.pdf", pdf_bytes, "application/pdf"))],
+        )
+
+    assert response.status_code == 200
+    assert "looks like a duplicate" not in response.text.lower()
+
+
+# ---------------------------------------------------------------------------
 # POST /import/pdf/confirm  — commit step
 # ---------------------------------------------------------------------------
 
